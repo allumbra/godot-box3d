@@ -41,6 +41,14 @@ public:
 	// changed, to (re)build the live b3JointId if both bodies now have a b3BodyId.
 	void rebuild();
 
+	// Called by Box3DBodyImpl3D after its b3BodyId was destroyed/recreated (space change):
+	// the old b3JointId is implicitly gone (box3d destroys joints with their body), so the
+	// joint must be rebuilt against the new body ids.
+	void on_body_id_changed() { rebuild(); }
+
+	// Called from Box3DBodyImpl3D's destructor for every joint still attached to it.
+	void on_body_destroyed(Box3DBodyImpl3D* p_body);
+
 protected:
 	Box3DJointImpl3D(Box3DBodyImpl3D* p_body_a, Box3DBodyImpl3D* p_body_b, const Transform3D& p_local_frame_a, const Transform3D& p_local_frame_b);
 

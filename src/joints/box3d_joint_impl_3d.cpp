@@ -15,9 +15,33 @@ Box3DJointImpl3D::Box3DJointImpl3D(
 		local_frame_b(p_local_frame_b),
 		body_a(p_body_a),
 		body_b(p_body_b) {
+	if (body_a != nullptr) {
+		body_a->register_joint(this);
+	}
+	if (body_b != nullptr) {
+		body_b->register_joint(this);
+	}
 }
 
 Box3DJointImpl3D::~Box3DJointImpl3D() {
+	if (body_a != nullptr) {
+		body_a->unregister_joint(this);
+	}
+	if (body_b != nullptr) {
+		body_b->unregister_joint(this);
+	}
+	_destroy_joint_id();
+}
+
+void Box3DJointImpl3D::on_body_destroyed(Box3DBodyImpl3D* p_body) {
+	// The body (and with it, via b3DestroyBody, any live box3d joint) is going away;
+	// drop our reference so rebuild()/destructor never touch freed state.
+	if (body_a == p_body) {
+		body_a = nullptr;
+	}
+	if (body_b == p_body) {
+		body_b = nullptr;
+	}
 	_destroy_joint_id();
 }
 
@@ -53,8 +77,10 @@ void Box3DJointImpl3D::rebuild() {
 }
 
 void Box3DJointImpl3D::_destroy_joint_id() {
-	if (has_joint_id()) {
+	// b3DestroyBody destroys attached joints inside box3d, so a cached joint_id can be
+	// stale by the time we get here (e.g. a body left its space) — validate first.
+	if (has_joint_id() && b3Joint_IsValid(joint_id)) {
 		b3DestroyJoint(joint_id, true);
-		joint_id = b3_nullJointId;
 	}
+	joint_id = b3_nullJointId;
 }

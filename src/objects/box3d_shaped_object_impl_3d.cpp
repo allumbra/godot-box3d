@@ -28,7 +28,8 @@ b3ShapeId create_box3d_shape(
 		bool p_is_sensor,
 		void* p_user_data,
 		float p_friction,
-		float p_restitution) {
+		float p_restitution,
+		float p_rolling_resistance) {
 	Box3DShapeImpl3D* shape = p_instance.get_shape();
 	if (shape == nullptr || p_instance.is_disabled()) {
 		return b3_nullShapeId;
@@ -49,6 +50,8 @@ b3ShapeId create_box3d_shape(
 	def.baseMaterial = b3DefaultSurfaceMaterial();
 	def.baseMaterial.friction = p_friction;
 	def.baseMaterial.restitution = p_restitution;
+	// Box3D applies rolling resistance to spheres and capsules only; harmless elsewhere.
+	def.baseMaterial.rollingResistance = p_rolling_resistance;
 
 	const Transform3D& local = p_instance.get_transform();
 	const PhysicsServer3D::ShapeType type = shape->get_type();
@@ -286,6 +289,19 @@ void Box3DShapedObjectImpl3D::rebuild_shapes() {
 	}
 }
 
+void Box3DShapedObjectImpl3D::_refresh_shape_materials() {
+	for (auto& instance : shapes) {
+		if (!instance.has_shape_id()) {
+			continue;
+		}
+		b3SurfaceMaterial material = b3Shape_GetSurfaceMaterial(instance.get_shape_id());
+		material.friction = _get_shape_friction();
+		material.restitution = _get_shape_restitution();
+		material.rollingResistance = _get_shape_rolling_resistance();
+		b3Shape_SetSurfaceMaterial(instance.get_shape_id(), material);
+	}
+}
+
 void Box3DShapedObjectImpl3D::_destroy_body_id() {
 	if (has_body_id()) {
 		for (auto& instance : shapes) {
@@ -300,7 +316,7 @@ void Box3DShapedObjectImpl3D::_create_shape_instance(Box3DShapeInstance3D& p_ins
 	if (p_instance.has_shape_id() || !has_body_id()) {
 		return;
 	}
-	const b3ShapeId shape_id = create_box3d_shape(body_id, p_instance, collision_layer, collision_mask, _is_sensor_body(), &p_instance, _get_shape_friction(), _get_shape_restitution());
+	const b3ShapeId shape_id = create_box3d_shape(body_id, p_instance, collision_layer, collision_mask, _is_sensor_body(), &p_instance, _get_shape_friction(), _get_shape_restitution(), _get_shape_rolling_resistance());
 	p_instance.set_shape_id(shape_id);
 }
 

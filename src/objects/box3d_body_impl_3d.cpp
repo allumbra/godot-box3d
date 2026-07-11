@@ -1,15 +1,40 @@
 #include "box3d_body_impl_3d.hpp"
 
+#include "../joints/box3d_joint_impl_3d.hpp"
 #include "../misc/type_conversions.hpp"
 #include "box3d_physics_direct_body_state_3d.hpp"
 
 #include <box3d/box3d.h>
 
 Box3DBodyImpl3D::~Box3DBodyImpl3D() {
+	// Copy: on_body_destroyed() does not unregister, but guard against future mutation.
+	HashSet<Box3DJointImpl3D*> attached = joints;
+	for (Box3DJointImpl3D* joint : attached) {
+		joint->on_body_destroyed(this);
+	}
+	joints.clear();
+
 	if (direct_state != nullptr) {
 		memdelete(direct_state);
 		direct_state = nullptr;
 	}
+}
+
+void Box3DBodyImpl3D::set_space(Box3DSpace3D* p_space) {
+	if (get_space() == p_space) {
+		return;
+	}
+	Box3DShapedObjectImpl3D::set_space(p_space);
+	// The b3BodyId was just destroyed and/or recreated; any joint built against the old
+	// id is implicitly gone inside box3d and must be rebuilt against the new one.
+	for (Box3DJointImpl3D* joint : joints) {
+		joint->on_body_id_changed();
+	}
+}
+
+void Box3DBodyImpl3D::set_rolling_resistance(real_t p_value) {
+	rolling_resistance = p_value;
+	_refresh_shape_materials();
 }
 
 Box3DPhysicsDirectBodyState3D* Box3DBodyImpl3D::get_direct_state_or_null() {

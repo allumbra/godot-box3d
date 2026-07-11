@@ -4,6 +4,7 @@
 #include "../joints/box3d_joint_impl_3d.hpp"
 #include "../joints/box3d_pin_joint_impl_3d.hpp"
 #include "../joints/box3d_slider_joint_impl_3d.hpp"
+#include "../joints/box3d_wheel_joint_impl_3d.hpp"
 #include "../misc/type_conversions.hpp"
 #include "../objects/box3d_area_impl_3d.hpp"
 #include "../objects/box3d_body_impl_3d.hpp"
@@ -945,6 +946,117 @@ void Box3DPhysicsServer3D::_joint_make_hinge_simple(const RID& p_joint, const RI
 	joint->set_rid(p_joint);
 	joint_owner.replace(p_joint, joint);
 	joint->rebuild();
+}
+
+RID Box3DPhysicsServer3D::wheel_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b) {
+	Box3DBodyImpl3D* body_a = body_owner.get_or_null(p_body_a);
+	Box3DBodyImpl3D* body_b = body_owner.get_or_null(p_body_b);
+	ERR_FAIL_NULL_V(body_a, RID());
+	ERR_FAIL_NULL_V(body_b, RID());
+
+	const RID rid = joint_owner.make_rid(nullptr);
+	auto* joint = memnew(Box3DWheelJointImpl3D(body_a, body_b, p_frame_a, p_frame_b));
+	joint->set_rid(rid);
+	joint_owner.replace(rid, joint);
+	joint->rebuild();
+	return rid;
+}
+
+void Box3DPhysicsServer3D::wheel_joint_set_param(const RID& p_joint, int p_param, double p_value) {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	ERR_FAIL_INDEX(p_param, Box3DWheelJointImpl3D::PARAM_MAX);
+	joint->set_param((Box3DWheelJointImpl3D::Param)p_param, p_value);
+}
+
+double Box3DPhysicsServer3D::wheel_joint_get_param(const RID& p_joint, int p_param) const {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	ERR_FAIL_INDEX_V(p_param, Box3DWheelJointImpl3D::PARAM_MAX, 0.0);
+	return joint->get_param((Box3DWheelJointImpl3D::Param)p_param);
+}
+
+void Box3DPhysicsServer3D::wheel_joint_set_flag(const RID& p_joint, int p_flag, bool p_enabled) {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	ERR_FAIL_INDEX(p_flag, Box3DWheelJointImpl3D::FLAG_MAX);
+	joint->set_flag((Box3DWheelJointImpl3D::Flag)p_flag, p_enabled);
+}
+
+bool Box3DPhysicsServer3D::wheel_joint_get_flag(const RID& p_joint, int p_flag) const {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, false);
+	ERR_FAIL_INDEX_V(p_flag, Box3DWheelJointImpl3D::FLAG_MAX, false);
+	return joint->get_flag((Box3DWheelJointImpl3D::Flag)p_flag);
+}
+
+double Box3DPhysicsServer3D::wheel_joint_get_spin_speed(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_spin_speed();
+}
+
+double Box3DPhysicsServer3D::wheel_joint_get_spin_torque(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_spin_torque();
+}
+
+double Box3DPhysicsServer3D::wheel_joint_get_steering_angle(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_steering_angle();
+}
+
+double Box3DPhysicsServer3D::wheel_joint_get_steering_torque(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DWheelJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_steering_torque();
+}
+
+void Box3DPhysicsServer3D::body_set_rolling_resistance(const RID& p_body, double p_value) {
+	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL(body);
+	body->set_rolling_resistance(p_value);
+}
+
+double Box3DPhysicsServer3D::body_get_rolling_resistance(const RID& p_body) const {
+	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL_V(body, 0.0);
+	return body->get_rolling_resistance();
+}
+
+void Box3DPhysicsServer3D::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("wheel_joint_create", "body_a", "body_b", "frame_a", "frame_b"), &Box3DPhysicsServer3D::wheel_joint_create);
+	ClassDB::bind_method(D_METHOD("wheel_joint_set_param", "joint", "param", "value"), &Box3DPhysicsServer3D::wheel_joint_set_param);
+	ClassDB::bind_method(D_METHOD("wheel_joint_get_param", "joint", "param"), &Box3DPhysicsServer3D::wheel_joint_get_param);
+	ClassDB::bind_method(D_METHOD("wheel_joint_set_flag", "joint", "flag", "enabled"), &Box3DPhysicsServer3D::wheel_joint_set_flag);
+	ClassDB::bind_method(D_METHOD("wheel_joint_get_flag", "joint", "flag"), &Box3DPhysicsServer3D::wheel_joint_get_flag);
+	ClassDB::bind_method(D_METHOD("wheel_joint_get_spin_speed", "joint"), &Box3DPhysicsServer3D::wheel_joint_get_spin_speed);
+	ClassDB::bind_method(D_METHOD("wheel_joint_get_spin_torque", "joint"), &Box3DPhysicsServer3D::wheel_joint_get_spin_torque);
+	ClassDB::bind_method(D_METHOD("wheel_joint_get_steering_angle", "joint"), &Box3DPhysicsServer3D::wheel_joint_get_steering_angle);
+	ClassDB::bind_method(D_METHOD("wheel_joint_get_steering_torque", "joint"), &Box3DPhysicsServer3D::wheel_joint_get_steering_torque);
+	ClassDB::bind_method(D_METHOD("body_set_rolling_resistance", "body", "value"), &Box3DPhysicsServer3D::body_set_rolling_resistance);
+	ClassDB::bind_method(D_METHOD("body_get_rolling_resistance", "body"), &Box3DPhysicsServer3D::body_get_rolling_resistance);
+
+	const StringName cls = get_class_static();
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_HERTZ", Box3DWheelJointImpl3D::PARAM_SUSPENSION_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_DAMPING", Box3DWheelJointImpl3D::PARAM_SUSPENSION_DAMPING);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_LOWER", Box3DWheelJointImpl3D::PARAM_SUSPENSION_LOWER);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_UPPER", Box3DWheelJointImpl3D::PARAM_SUSPENSION_UPPER);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SPIN_MOTOR_SPEED", Box3DWheelJointImpl3D::PARAM_SPIN_MOTOR_SPEED);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_MAX_SPIN_TORQUE", Box3DWheelJointImpl3D::PARAM_MAX_SPIN_TORQUE);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_STEERING_HERTZ", Box3DWheelJointImpl3D::PARAM_STEERING_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_STEERING_DAMPING", Box3DWheelJointImpl3D::PARAM_STEERING_DAMPING);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_TARGET_STEERING_ANGLE", Box3DWheelJointImpl3D::PARAM_TARGET_STEERING_ANGLE);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_MAX_STEERING_TORQUE", Box3DWheelJointImpl3D::PARAM_MAX_STEERING_TORQUE);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_STEERING_LOWER", Box3DWheelJointImpl3D::PARAM_STEERING_LOWER);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_STEERING_UPPER", Box3DWheelJointImpl3D::PARAM_STEERING_UPPER);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_SUSPENSION", Box3DWheelJointImpl3D::FLAG_ENABLE_SUSPENSION);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_SUSPENSION_LIMIT", Box3DWheelJointImpl3D::FLAG_ENABLE_SUSPENSION_LIMIT);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_SPIN_MOTOR", Box3DWheelJointImpl3D::FLAG_ENABLE_SPIN_MOTOR);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_STEERING", Box3DWheelJointImpl3D::FLAG_ENABLE_STEERING);
+	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_STEERING_LIMIT", Box3DWheelJointImpl3D::FLAG_ENABLE_STEERING_LIMIT);
 }
 
 void Box3DPhysicsServer3D::_hinge_joint_set_param(const RID& p_joint, PhysicsServer3D::HingeJointParam p_param, double p_value) {

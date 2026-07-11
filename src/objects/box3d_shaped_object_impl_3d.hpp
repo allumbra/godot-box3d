@@ -71,6 +71,12 @@ protected:
 
 	virtual float _get_shape_restitution() const { return 0.0f; }
 
+	virtual float _get_shape_rolling_resistance() const { return 0.0f; }
+
+	// Re-applies the surface material (friction/restitution/rolling resistance, sourced
+	// from the _get_shape_* virtuals) to every live shape id.
+	void _refresh_shape_materials();
+
 	void _destroy_body_id();
 
 	b3BodyId body_id = b3_nullBodyId;

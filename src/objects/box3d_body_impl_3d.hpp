@@ -3,10 +3,12 @@
 #include "box3d_shaped_object_impl_3d.hpp"
 
 #include <godot_cpp/classes/physics_server3d.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/variant/callable.hpp>
 
 using namespace godot;
 
+class Box3DJointImpl3D;
 class Box3DPhysicsDirectBodyState3D;
 
 // RigidBody-facing wrapper: static/kinematic/dynamic bodies. Box3D requires a valid world
@@ -22,6 +24,20 @@ public:
 	// Lazily creates (on first call) the PhysicsDirectBodyState3DExtension wrapper handed
 	// to scripts and to Godot core's move_and_slide(); reused for the object's lifetime.
 	Box3DPhysicsDirectBodyState3D* get_direct_state_or_null();
+
+	// Joints attached to this body register themselves so they can be rebuilt when the
+	// b3BodyId changes (space attach/detach recreates the body inside box3d, which
+	// implicitly destroys its joints) and detached safely when this body is freed.
+	void register_joint(Box3DJointImpl3D* p_joint) { joints.insert(p_joint); }
+
+	void unregister_joint(Box3DJointImpl3D* p_joint) { joints.erase(p_joint); }
+
+	void set_space(Box3DSpace3D* p_space) override;
+
+	// Box3D-specific (b3SurfaceMaterial.rollingResistance, [0,1], spheres/capsules only).
+	real_t get_rolling_resistance() const { return rolling_resistance; }
+
+	void set_rolling_resistance(real_t p_value);
 
 	BodyMode get_mode() const { return mode; }
 
@@ -151,6 +167,8 @@ protected:
 
 	float _get_shape_restitution() const override { return (float)bounce; }
 
+	float _get_shape_rolling_resistance() const override { return (float)rolling_resistance; }
+
 private:
 	void _update_motion_locks();
 
@@ -167,6 +185,7 @@ private:
 	real_t angular_damping = 0.0;
 	real_t bounce = 0.0;
 	real_t friction = 1.0;
+	real_t rolling_resistance = 0.0;
 	real_t gravity_scale = 1.0;
 	real_t sleep_threshold = 0.05f;
 	bool sleep_enabled = true;
@@ -193,4 +212,6 @@ private:
 	bool contact_monitor_enabled = false;
 
 	Box3DPhysicsDirectBodyState3D* direct_state = nullptr;
+
+	HashSet<Box3DJointImpl3D*> joints;
 };

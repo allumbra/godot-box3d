@@ -209,6 +209,24 @@ public:
 	void _joint_disable_collisions_between_bodies(const RID& p_joint, bool p_disable) override;
 	bool _joint_is_disabled_collisions_between_bodies(const RID& p_joint) const override;
 
+	// --- Box3D-specific: wheel joint (script-facing; Godot's PhysicsServer3D has no
+	// wheel joint type, so these are bound via _bind_methods instead of overrides).
+	// Body A is the chassis, body B is the wheel; frames follow box3d conventions
+	// (spin about frame B local Z, suspension/steering about frame A local X).
+	RID wheel_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b);
+	void wheel_joint_set_param(const RID& p_joint, int p_param, double p_value);
+	double wheel_joint_get_param(const RID& p_joint, int p_param) const;
+	void wheel_joint_set_flag(const RID& p_joint, int p_flag, bool p_enabled);
+	bool wheel_joint_get_flag(const RID& p_joint, int p_flag) const;
+	double wheel_joint_get_spin_speed(const RID& p_joint) const;
+	double wheel_joint_get_spin_torque(const RID& p_joint) const;
+	double wheel_joint_get_steering_angle(const RID& p_joint) const;
+	double wheel_joint_get_steering_torque(const RID& p_joint) const;
+
+	// --- Box3D-specific: per-body rolling resistance (b3SurfaceMaterial, spheres/capsules).
+	void body_set_rolling_resistance(const RID& p_body, double p_value);
+	double body_get_rolling_resistance(const RID& p_body) const;
+
 	// --- Soft bodies (non-goal: return invalid RID / no-op) ---
 	RID _soft_body_create() override;
 	void _soft_body_update_rendering_server(const RID& p_body, PhysicsServer3DRenderingServerHandler* p_rendering_server_handler) override;
@@ -258,7 +276,7 @@ public:
 	int32_t _get_process_info(PhysicsServer3D::ProcessInfo p_process_info) override;
 
 protected:
-	static void _bind_methods() {}
+	static void _bind_methods();
 
 private:
 	Box3DShapedObjectImpl3D* _get_shaped_object(const RID& p_rid) const;

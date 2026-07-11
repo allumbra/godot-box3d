@@ -2,6 +2,7 @@
 
 #include "misc/box3d_globals.hpp"
 #include "objects/box3d_physics_direct_body_state_3d.hpp"
+#include "objects/box3d_wheel_joint_3d.hpp"
 #include "servers/box3d_physics_server_3d.hpp"
 #include "spaces/box3d_physics_direct_space_state_3d.hpp"
 
@@ -31,6 +32,12 @@ void initialize_box3d_module(ModuleInitializationLevel p_level) {
 		PhysicsServer3DManager::get_singleton()->register_server(
 				"Box3D Physics (Extension)",
 				callable_mp_static(&_create_box3d_physics_server));
+	}
+
+	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+		// Scene-facing nodes (Box3D features with no Godot equivalent) register at
+		// SCENE level so they appear in the editor's node dialog.
+		GDREGISTER_CLASS(Box3DWheelJoint3D);
 	}
 }
 
