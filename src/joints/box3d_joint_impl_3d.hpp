@@ -6,6 +6,8 @@
 
 #include <box3d/id.h>
 
+#include <cfloat>
+
 using namespace godot;
 
 class Box3DBodyImpl3D;
@@ -49,6 +51,17 @@ public:
 	// Called from Box3DBodyImpl3D's destructor for every joint still attached to it.
 	void on_body_destroyed(Box3DBodyImpl3D* p_body);
 
+	// Force/torque event thresholds (b3JointDef.forceThreshold/torqueThreshold): when
+	// exceeded during a step, box3d emits a joint event, surfaced by the server as
+	// space_get_joint_force_events(). FLT_MAX (default) never fires.
+	real_t get_force_threshold() const { return force_threshold; }
+
+	void set_force_threshold(real_t p_threshold);
+
+	real_t get_torque_threshold() const { return torque_threshold; }
+
+	void set_torque_threshold(real_t p_threshold);
+
 protected:
 	Box3DJointImpl3D(Box3DBodyImpl3D* p_body_a, Box3DBodyImpl3D* p_body_b, const Transform3D& p_local_frame_a, const Transform3D& p_local_frame_b);
 
@@ -64,5 +77,7 @@ private:
 	Box3DBodyImpl3D* body_a = nullptr;
 	Box3DBodyImpl3D* body_b = nullptr;
 	b3JointId joint_id = b3_nullJointId;
+	real_t force_threshold = FLT_MAX;
+	real_t torque_threshold = FLT_MAX;
 	bool collision_disabled = false;
 };

@@ -3,7 +3,10 @@
 #include "../joints/box3d_hinge_joint_impl_3d.hpp"
 #include "../joints/box3d_joint_impl_3d.hpp"
 #include "../joints/box3d_pin_joint_impl_3d.hpp"
+#include "../joints/box3d_distance_joint_impl_3d.hpp"
+#include "../joints/box3d_motor_joint_impl_3d.hpp"
 #include "../joints/box3d_slider_joint_impl_3d.hpp"
+#include "../joints/box3d_weld_joint_impl_3d.hpp"
 #include "../joints/box3d_wheel_joint_impl_3d.hpp"
 #include "../misc/type_conversions.hpp"
 #include "../objects/box3d_area_impl_3d.hpp"
@@ -1014,6 +1017,191 @@ double Box3DPhysicsServer3D::wheel_joint_get_steering_torque(const RID& p_joint)
 	return joint->get_steering_torque();
 }
 
+RID Box3DPhysicsServer3D::weld_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b) {
+	Box3DBodyImpl3D* body_a = body_owner.get_or_null(p_body_a);
+	Box3DBodyImpl3D* body_b = body_owner.get_or_null(p_body_b);
+	ERR_FAIL_NULL_V(body_a, RID());
+	ERR_FAIL_NULL_V(body_b, RID());
+	const RID rid = joint_owner.make_rid(nullptr);
+	auto* joint = memnew(Box3DWeldJointImpl3D(body_a, body_b, p_frame_a, p_frame_b));
+	joint->set_rid(rid);
+	joint_owner.replace(rid, joint);
+	joint->rebuild();
+	return rid;
+}
+
+void Box3DPhysicsServer3D::weld_joint_set_param(const RID& p_joint, int p_param, double p_value) {
+	auto* joint = dynamic_cast<Box3DWeldJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	ERR_FAIL_INDEX(p_param, Box3DWeldJointImpl3D::PARAM_MAX);
+	joint->set_param((Box3DWeldJointImpl3D::Param)p_param, p_value);
+}
+
+double Box3DPhysicsServer3D::weld_joint_get_param(const RID& p_joint, int p_param) const {
+	auto* joint = dynamic_cast<Box3DWeldJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	ERR_FAIL_INDEX_V(p_param, Box3DWeldJointImpl3D::PARAM_MAX, 0.0);
+	return joint->get_param((Box3DWeldJointImpl3D::Param)p_param);
+}
+
+RID Box3DPhysicsServer3D::distance_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b) {
+	Box3DBodyImpl3D* body_a = body_owner.get_or_null(p_body_a);
+	Box3DBodyImpl3D* body_b = body_owner.get_or_null(p_body_b);
+	ERR_FAIL_NULL_V(body_a, RID());
+	ERR_FAIL_NULL_V(body_b, RID());
+	const RID rid = joint_owner.make_rid(nullptr);
+	auto* joint = memnew(Box3DDistanceJointImpl3D(body_a, body_b, p_frame_a, p_frame_b));
+	joint->set_rid(rid);
+	joint_owner.replace(rid, joint);
+	joint->rebuild();
+	return rid;
+}
+
+void Box3DPhysicsServer3D::distance_joint_set_param(const RID& p_joint, int p_param, double p_value) {
+	auto* joint = dynamic_cast<Box3DDistanceJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	ERR_FAIL_INDEX(p_param, Box3DDistanceJointImpl3D::PARAM_MAX);
+	joint->set_param((Box3DDistanceJointImpl3D::Param)p_param, p_value);
+}
+
+double Box3DPhysicsServer3D::distance_joint_get_param(const RID& p_joint, int p_param) const {
+	auto* joint = dynamic_cast<Box3DDistanceJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	ERR_FAIL_INDEX_V(p_param, Box3DDistanceJointImpl3D::PARAM_MAX, 0.0);
+	return joint->get_param((Box3DDistanceJointImpl3D::Param)p_param);
+}
+
+void Box3DPhysicsServer3D::distance_joint_set_flag(const RID& p_joint, int p_flag, bool p_enabled) {
+	auto* joint = dynamic_cast<Box3DDistanceJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	ERR_FAIL_INDEX(p_flag, Box3DDistanceJointImpl3D::FLAG_MAX);
+	joint->set_flag((Box3DDistanceJointImpl3D::Flag)p_flag, p_enabled);
+}
+
+bool Box3DPhysicsServer3D::distance_joint_get_flag(const RID& p_joint, int p_flag) const {
+	auto* joint = dynamic_cast<Box3DDistanceJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, false);
+	ERR_FAIL_INDEX_V(p_flag, Box3DDistanceJointImpl3D::FLAG_MAX, false);
+	return joint->get_flag((Box3DDistanceJointImpl3D::Flag)p_flag);
+}
+
+double Box3DPhysicsServer3D::distance_joint_get_current_length(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DDistanceJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_current_length();
+}
+
+double Box3DPhysicsServer3D::distance_joint_get_motor_force(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DDistanceJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_motor_force();
+}
+
+RID Box3DPhysicsServer3D::motor_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b) {
+	Box3DBodyImpl3D* body_a = body_owner.get_or_null(p_body_a);
+	Box3DBodyImpl3D* body_b = body_owner.get_or_null(p_body_b);
+	ERR_FAIL_NULL_V(body_a, RID());
+	ERR_FAIL_NULL_V(body_b, RID());
+	const RID rid = joint_owner.make_rid(nullptr);
+	auto* joint = memnew(Box3DMotorJointImpl3D(body_a, body_b, p_frame_a, p_frame_b));
+	joint->set_rid(rid);
+	joint_owner.replace(rid, joint);
+	joint->rebuild();
+	return rid;
+}
+
+void Box3DPhysicsServer3D::motor_joint_set_param(const RID& p_joint, int p_param, double p_value) {
+	auto* joint = dynamic_cast<Box3DMotorJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	ERR_FAIL_INDEX(p_param, Box3DMotorJointImpl3D::PARAM_MAX);
+	joint->set_param((Box3DMotorJointImpl3D::Param)p_param, p_value);
+}
+
+double Box3DPhysicsServer3D::motor_joint_get_param(const RID& p_joint, int p_param) const {
+	auto* joint = dynamic_cast<Box3DMotorJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	ERR_FAIL_INDEX_V(p_param, Box3DMotorJointImpl3D::PARAM_MAX, 0.0);
+	return joint->get_param((Box3DMotorJointImpl3D::Param)p_param);
+}
+
+void Box3DPhysicsServer3D::motor_joint_set_linear_velocity(const RID& p_joint, const Vector3& p_velocity) {
+	auto* joint = dynamic_cast<Box3DMotorJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	joint->set_linear_velocity(p_velocity);
+}
+
+Vector3 Box3DPhysicsServer3D::motor_joint_get_linear_velocity(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DMotorJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, Vector3());
+	return joint->get_linear_velocity();
+}
+
+void Box3DPhysicsServer3D::motor_joint_set_angular_velocity(const RID& p_joint, const Vector3& p_velocity) {
+	auto* joint = dynamic_cast<Box3DMotorJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	joint->set_angular_velocity(p_velocity);
+}
+
+Vector3 Box3DPhysicsServer3D::motor_joint_get_angular_velocity(const RID& p_joint) const {
+	auto* joint = dynamic_cast<Box3DMotorJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, Vector3());
+	return joint->get_angular_velocity();
+}
+
+Vector3 Box3DPhysicsServer3D::joint_get_constraint_force(const RID& p_joint) const {
+	Box3DJointImpl3D* joint = joint_owner.get_or_null(p_joint);
+	ERR_FAIL_NULL_V(joint, Vector3());
+	if (!joint->has_joint_id()) {
+		return Vector3();
+	}
+	return b3_to_godot(b3Joint_GetConstraintForce(joint->get_joint_id()));
+}
+
+Vector3 Box3DPhysicsServer3D::joint_get_constraint_torque(const RID& p_joint) const {
+	Box3DJointImpl3D* joint = joint_owner.get_or_null(p_joint);
+	ERR_FAIL_NULL_V(joint, Vector3());
+	if (!joint->has_joint_id()) {
+		return Vector3();
+	}
+	return b3_to_godot(b3Joint_GetConstraintTorque(joint->get_joint_id()));
+}
+
+void Box3DPhysicsServer3D::joint_set_force_threshold(const RID& p_joint, double p_threshold) {
+	Box3DJointImpl3D* joint = joint_owner.get_or_null(p_joint);
+	ERR_FAIL_NULL(joint);
+	joint->set_force_threshold(p_threshold);
+}
+
+double Box3DPhysicsServer3D::joint_get_force_threshold(const RID& p_joint) const {
+	Box3DJointImpl3D* joint = joint_owner.get_or_null(p_joint);
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_force_threshold();
+}
+
+void Box3DPhysicsServer3D::joint_set_torque_threshold(const RID& p_joint, double p_threshold) {
+	Box3DJointImpl3D* joint = joint_owner.get_or_null(p_joint);
+	ERR_FAIL_NULL(joint);
+	joint->set_torque_threshold(p_threshold);
+}
+
+double Box3DPhysicsServer3D::joint_get_torque_threshold(const RID& p_joint) const {
+	Box3DJointImpl3D* joint = joint_owner.get_or_null(p_joint);
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_torque_threshold();
+}
+
+Array Box3DPhysicsServer3D::space_get_contact_hit_events(const RID& p_space) const {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, Array());
+	return space->get_contact_hit_events();
+}
+
+Array Box3DPhysicsServer3D::space_get_joint_force_events(const RID& p_space) const {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, Array());
+	return space->get_joint_force_events();
+}
+
 void Box3DPhysicsServer3D::body_set_rolling_resistance(const RID& p_body, double p_value) {
 	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
 	ERR_FAIL_NULL(body);
@@ -1039,6 +1227,35 @@ void Box3DPhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("body_set_rolling_resistance", "body", "value"), &Box3DPhysicsServer3D::body_set_rolling_resistance);
 	ClassDB::bind_method(D_METHOD("body_get_rolling_resistance", "body"), &Box3DPhysicsServer3D::body_get_rolling_resistance);
 
+	ClassDB::bind_method(D_METHOD("weld_joint_create", "body_a", "body_b", "frame_a", "frame_b"), &Box3DPhysicsServer3D::weld_joint_create);
+	ClassDB::bind_method(D_METHOD("weld_joint_set_param", "joint", "param", "value"), &Box3DPhysicsServer3D::weld_joint_set_param);
+	ClassDB::bind_method(D_METHOD("weld_joint_get_param", "joint", "param"), &Box3DPhysicsServer3D::weld_joint_get_param);
+
+	ClassDB::bind_method(D_METHOD("distance_joint_create", "body_a", "body_b", "frame_a", "frame_b"), &Box3DPhysicsServer3D::distance_joint_create);
+	ClassDB::bind_method(D_METHOD("distance_joint_set_param", "joint", "param", "value"), &Box3DPhysicsServer3D::distance_joint_set_param);
+	ClassDB::bind_method(D_METHOD("distance_joint_get_param", "joint", "param"), &Box3DPhysicsServer3D::distance_joint_get_param);
+	ClassDB::bind_method(D_METHOD("distance_joint_set_flag", "joint", "flag", "enabled"), &Box3DPhysicsServer3D::distance_joint_set_flag);
+	ClassDB::bind_method(D_METHOD("distance_joint_get_flag", "joint", "flag"), &Box3DPhysicsServer3D::distance_joint_get_flag);
+	ClassDB::bind_method(D_METHOD("distance_joint_get_current_length", "joint"), &Box3DPhysicsServer3D::distance_joint_get_current_length);
+	ClassDB::bind_method(D_METHOD("distance_joint_get_motor_force", "joint"), &Box3DPhysicsServer3D::distance_joint_get_motor_force);
+
+	ClassDB::bind_method(D_METHOD("motor_joint_create", "body_a", "body_b", "frame_a", "frame_b"), &Box3DPhysicsServer3D::motor_joint_create);
+	ClassDB::bind_method(D_METHOD("motor_joint_set_param", "joint", "param", "value"), &Box3DPhysicsServer3D::motor_joint_set_param);
+	ClassDB::bind_method(D_METHOD("motor_joint_get_param", "joint", "param"), &Box3DPhysicsServer3D::motor_joint_get_param);
+	ClassDB::bind_method(D_METHOD("motor_joint_set_linear_velocity", "joint", "velocity"), &Box3DPhysicsServer3D::motor_joint_set_linear_velocity);
+	ClassDB::bind_method(D_METHOD("motor_joint_get_linear_velocity", "joint"), &Box3DPhysicsServer3D::motor_joint_get_linear_velocity);
+	ClassDB::bind_method(D_METHOD("motor_joint_set_angular_velocity", "joint", "velocity"), &Box3DPhysicsServer3D::motor_joint_set_angular_velocity);
+	ClassDB::bind_method(D_METHOD("motor_joint_get_angular_velocity", "joint"), &Box3DPhysicsServer3D::motor_joint_get_angular_velocity);
+
+	ClassDB::bind_method(D_METHOD("joint_get_constraint_force", "joint"), &Box3DPhysicsServer3D::joint_get_constraint_force);
+	ClassDB::bind_method(D_METHOD("joint_get_constraint_torque", "joint"), &Box3DPhysicsServer3D::joint_get_constraint_torque);
+	ClassDB::bind_method(D_METHOD("joint_set_force_threshold", "joint", "threshold"), &Box3DPhysicsServer3D::joint_set_force_threshold);
+	ClassDB::bind_method(D_METHOD("joint_get_force_threshold", "joint"), &Box3DPhysicsServer3D::joint_get_force_threshold);
+	ClassDB::bind_method(D_METHOD("joint_set_torque_threshold", "joint", "threshold"), &Box3DPhysicsServer3D::joint_set_torque_threshold);
+	ClassDB::bind_method(D_METHOD("joint_get_torque_threshold", "joint"), &Box3DPhysicsServer3D::joint_get_torque_threshold);
+	ClassDB::bind_method(D_METHOD("space_get_contact_hit_events", "space"), &Box3DPhysicsServer3D::space_get_contact_hit_events);
+	ClassDB::bind_method(D_METHOD("space_get_joint_force_events", "space"), &Box3DPhysicsServer3D::space_get_joint_force_events);
+
 	const StringName cls = get_class_static();
 	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_HERTZ", Box3DWheelJointImpl3D::PARAM_SUSPENSION_HERTZ);
 	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_DAMPING", Box3DWheelJointImpl3D::PARAM_SUSPENSION_DAMPING);
@@ -1057,6 +1274,33 @@ void Box3DPhysicsServer3D::_bind_methods() {
 	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_SPIN_MOTOR", Box3DWheelJointImpl3D::FLAG_ENABLE_SPIN_MOTOR);
 	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_STEERING", Box3DWheelJointImpl3D::FLAG_ENABLE_STEERING);
 	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_FLAG_ENABLE_STEERING_LIMIT", Box3DWheelJointImpl3D::FLAG_ENABLE_STEERING_LIMIT);
+
+	ClassDB::bind_integer_constant(cls, "", "WELD_JOINT_PARAM_LINEAR_HERTZ", Box3DWeldJointImpl3D::PARAM_LINEAR_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "WELD_JOINT_PARAM_LINEAR_DAMPING", Box3DWeldJointImpl3D::PARAM_LINEAR_DAMPING);
+	ClassDB::bind_integer_constant(cls, "", "WELD_JOINT_PARAM_ANGULAR_HERTZ", Box3DWeldJointImpl3D::PARAM_ANGULAR_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "WELD_JOINT_PARAM_ANGULAR_DAMPING", Box3DWeldJointImpl3D::PARAM_ANGULAR_DAMPING);
+
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_LENGTH", Box3DDistanceJointImpl3D::PARAM_LENGTH);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_LOWER_SPRING_FORCE", Box3DDistanceJointImpl3D::PARAM_LOWER_SPRING_FORCE);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_UPPER_SPRING_FORCE", Box3DDistanceJointImpl3D::PARAM_UPPER_SPRING_FORCE);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_HERTZ", Box3DDistanceJointImpl3D::PARAM_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_DAMPING", Box3DDistanceJointImpl3D::PARAM_DAMPING);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_MIN_LENGTH", Box3DDistanceJointImpl3D::PARAM_MIN_LENGTH);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_MAX_LENGTH", Box3DDistanceJointImpl3D::PARAM_MAX_LENGTH);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_MOTOR_SPEED", Box3DDistanceJointImpl3D::PARAM_MOTOR_SPEED);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_PARAM_MAX_MOTOR_FORCE", Box3DDistanceJointImpl3D::PARAM_MAX_MOTOR_FORCE);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_FLAG_ENABLE_SPRING", Box3DDistanceJointImpl3D::FLAG_ENABLE_SPRING);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_FLAG_ENABLE_LIMIT", Box3DDistanceJointImpl3D::FLAG_ENABLE_LIMIT);
+	ClassDB::bind_integer_constant(cls, "", "DISTANCE_JOINT_FLAG_ENABLE_MOTOR", Box3DDistanceJointImpl3D::FLAG_ENABLE_MOTOR);
+
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_MAX_VELOCITY_FORCE", Box3DMotorJointImpl3D::PARAM_MAX_VELOCITY_FORCE);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_MAX_VELOCITY_TORQUE", Box3DMotorJointImpl3D::PARAM_MAX_VELOCITY_TORQUE);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_LINEAR_HERTZ", Box3DMotorJointImpl3D::PARAM_LINEAR_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_LINEAR_DAMPING", Box3DMotorJointImpl3D::PARAM_LINEAR_DAMPING);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_MAX_SPRING_FORCE", Box3DMotorJointImpl3D::PARAM_MAX_SPRING_FORCE);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_ANGULAR_HERTZ", Box3DMotorJointImpl3D::PARAM_ANGULAR_HERTZ);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_ANGULAR_DAMPING", Box3DMotorJointImpl3D::PARAM_ANGULAR_DAMPING);
+	ClassDB::bind_integer_constant(cls, "", "MOTOR_JOINT_PARAM_MAX_SPRING_TORQUE", Box3DMotorJointImpl3D::PARAM_MAX_SPRING_TORQUE);
 }
 
 void Box3DPhysicsServer3D::_hinge_joint_set_param(const RID& p_joint, PhysicsServer3D::HingeJointParam p_param, double p_value) {

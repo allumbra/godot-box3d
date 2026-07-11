@@ -46,6 +46,9 @@ b3ShapeId create_box3d_shape(
 	// Area3D body_entered/body_exited would never fire.
 	def.enableSensorEvents = true;
 	def.enableContactEvents = !p_is_sensor;
+	// Hit events (b3ContactHitEvent) are cheap — box3d only emits them above the world's
+	// hit speed threshold — and feed space_get_contact_hit_events().
+	def.enableHitEvents = !p_is_sensor;
 	def.density = 1.0f;
 	def.baseMaterial = b3DefaultSurfaceMaterial();
 	def.baseMaterial.friction = p_friction;

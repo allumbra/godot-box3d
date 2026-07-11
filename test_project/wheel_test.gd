@@ -61,10 +61,11 @@ func _create_joint() -> void:
 	# spin axis = local Z of frame B (wheel rolls forward along world Z when
 	# spinning about world X — so frame B local Z maps to world X).
 	# Joint origin at the wheel center.
+	# global_transform reads identity inside SceneTree._initialize (Godot quirk),
+	# so local frames are computed arithmetically (bodies are unrotated).
 	var joint_basis := Basis(Vector3(0, 1, 0), Vector3(0, 0, 1), Vector3(1, 0, 0))
-	var joint_xform := Transform3D(joint_basis, wheel.position)
-	var frame_a: Transform3D = chassis.global_transform.affine_inverse() * joint_xform
-	var frame_b: Transform3D = wheel.global_transform.affine_inverse() * joint_xform
+	var frame_a := Transform3D(joint_basis, wheel.position - chassis.position)
+	var frame_b := Transform3D(joint_basis, Vector3())
 
 	joint_rid = server.wheel_joint_create(
 		chassis.get_rid(), wheel.get_rid(), frame_a, frame_b)

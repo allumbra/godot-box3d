@@ -73,6 +73,25 @@ void Box3DJointImpl3D::rebuild() {
 
 	if (has_joint_id()) {
 		b3Joint_SetCollideConnected(joint_id, !collision_disabled);
+		// The server maps joint events (see space_get_joint_force_events) back to this
+		// wrapper through the box3d user data pointer.
+		b3Joint_SetUserData(joint_id, this);
+		b3Joint_SetForceThreshold(joint_id, (float)force_threshold);
+		b3Joint_SetTorqueThreshold(joint_id, (float)torque_threshold);
+	}
+}
+
+void Box3DJointImpl3D::set_force_threshold(real_t p_threshold) {
+	force_threshold = p_threshold;
+	if (has_joint_id()) {
+		b3Joint_SetForceThreshold(joint_id, (float)p_threshold);
+	}
+}
+
+void Box3DJointImpl3D::set_torque_threshold(real_t p_threshold) {
+	torque_threshold = p_threshold;
+	if (has_joint_id()) {
+		b3Joint_SetTorqueThreshold(joint_id, (float)p_threshold);
 	}
 }
 

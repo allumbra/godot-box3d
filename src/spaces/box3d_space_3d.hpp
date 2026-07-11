@@ -63,6 +63,14 @@ public:
 	// then immediately drains every Box3D event array into the pending queues below.
 	void step(float p_step);
 
+	// Contact hit events (b3ContactHitEvent) from the most recent step: Array of
+	// Dictionary { body_a, body_b: RID, position, normal: Vector3, approach_speed: float }.
+	Array get_contact_hit_events() const { return contact_hit_events; }
+
+	// Joints whose force/torque event threshold was exceeded during the most recent step
+	// (see Box3DJointImpl3D::set_force_threshold): Array of joint RIDs.
+	Array get_joint_force_events() const { return joint_force_events; }
+
 	// Drains the pending queues, invoking every queued callable directly (this call *is*
 	// the deferred point, so callables run synchronously here rather than via
 	// call_deferred).
@@ -81,6 +89,9 @@ private:
 	};
 
 	void _apply_area_overrides();
+
+	Array contact_hit_events;
+	Array joint_force_events;
 
 	void _pull_body_events();
 

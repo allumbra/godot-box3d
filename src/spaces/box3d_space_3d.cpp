@@ -1,5 +1,6 @@
 #include "box3d_space_3d.hpp"
 
+#include "../joints/box3d_joint_impl_3d.hpp"
 #include "../misc/type_conversions.hpp"
 #include "../objects/box3d_area_impl_3d.hpp"
 #include "../objects/box3d_body_impl_3d.hpp"
@@ -89,13 +90,38 @@ void Box3DSpace3D::step(float p_step) {
 	_pull_body_events();
 	_pull_sensor_events();
 
-	// Contact and joint events are intentionally not drained into any callback pipeline
-	// for v1: RigidBody3D contact monitoring is served on-demand via
-	// b3Body_GetContactData, and joint events are ignored, per the plan. We still fetch
-	// them here so any internal Box3D per-step bookkeeping tied to fetching is exercised
-	// consistently, though this is not strictly required by the API.
-	b3World_GetContactEvents(world_id);
-	b3World_GetJointEvents(world_id);
+	// Begin/end touch stays on-demand (b3Body_GetContactData serves RigidBody3D contact
+	// monitoring), but hit events and joint force events are cached per step and exposed
+	// through the Box3D-specific server methods space_get_contact_hit_events /
+	// space_get_joint_force_events.
+	const b3ContactEvents contact_events = b3World_GetContactEvents(world_id);
+	contact_hit_events = Array();
+	for (int i = 0; i < contact_events.hitCount; i++) {
+		const b3ContactHitEvent& hit = contact_events.hitEvents[i];
+		const b3BodyId hit_body_a = b3Shape_GetBody(hit.shapeIdA);
+		const b3BodyId hit_body_b = b3Shape_GetBody(hit.shapeIdB);
+		auto* impl_a = static_cast<Box3DBodyImpl3D*>(b3Body_GetUserData(hit_body_a));
+		auto* impl_b = static_cast<Box3DBodyImpl3D*>(b3Body_GetUserData(hit_body_b));
+		if (impl_a == nullptr || impl_b == nullptr) {
+			continue;
+		}
+		Dictionary event;
+		event["body_a"] = impl_a->get_rid();
+		event["body_b"] = impl_b->get_rid();
+		event["position"] = b3_to_godot(hit.point);
+		event["normal"] = b3_to_godot(hit.normal);
+		event["approach_speed"] = hit.approachSpeed;
+		contact_hit_events.push_back(event);
+	}
+
+	const b3JointEvents joint_events = b3World_GetJointEvents(world_id);
+	joint_force_events = Array();
+	for (int i = 0; i < joint_events.count; i++) {
+		auto* joint = static_cast<Box3DJointImpl3D*>(joint_events.jointEvents[i].userData);
+		if (joint != nullptr) {
+			joint_force_events.push_back(joint->get_rid());
+		}
+	}
 }
 
 void Box3DSpace3D::_apply_area_overrides() {

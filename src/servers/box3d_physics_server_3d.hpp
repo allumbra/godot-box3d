@@ -227,6 +227,39 @@ public:
 	void body_set_rolling_resistance(const RID& p_body, double p_value);
 	double body_get_rolling_resistance(const RID& p_body) const;
 
+	// --- Box3D-specific: weld/distance/motor joints (no PhysicsServer3D equivalents).
+	RID weld_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b);
+	void weld_joint_set_param(const RID& p_joint, int p_param, double p_value);
+	double weld_joint_get_param(const RID& p_joint, int p_param) const;
+
+	RID distance_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b);
+	void distance_joint_set_param(const RID& p_joint, int p_param, double p_value);
+	double distance_joint_get_param(const RID& p_joint, int p_param) const;
+	void distance_joint_set_flag(const RID& p_joint, int p_flag, bool p_enabled);
+	bool distance_joint_get_flag(const RID& p_joint, int p_flag) const;
+	double distance_joint_get_current_length(const RID& p_joint) const;
+	double distance_joint_get_motor_force(const RID& p_joint) const;
+
+	RID motor_joint_create(const RID& p_body_a, const RID& p_body_b, const Transform3D& p_frame_a, const Transform3D& p_frame_b);
+	void motor_joint_set_param(const RID& p_joint, int p_param, double p_value);
+	double motor_joint_get_param(const RID& p_joint, int p_param) const;
+	void motor_joint_set_linear_velocity(const RID& p_joint, const Vector3& p_velocity);
+	Vector3 motor_joint_get_linear_velocity(const RID& p_joint) const;
+	void motor_joint_set_angular_velocity(const RID& p_joint, const Vector3& p_velocity);
+	Vector3 motor_joint_get_angular_velocity(const RID& p_joint) const;
+
+	// --- Box3D-specific: generic joint readbacks (work on every Box3D joint type).
+	Vector3 joint_get_constraint_force(const RID& p_joint) const;
+	Vector3 joint_get_constraint_torque(const RID& p_joint) const;
+
+	// --- Box3D-specific: joint force/torque event thresholds + per-step event queries.
+	void joint_set_force_threshold(const RID& p_joint, double p_threshold);
+	double joint_get_force_threshold(const RID& p_joint) const;
+	void joint_set_torque_threshold(const RID& p_joint, double p_threshold);
+	double joint_get_torque_threshold(const RID& p_joint) const;
+	Array space_get_contact_hit_events(const RID& p_space) const;
+	Array space_get_joint_force_events(const RID& p_space) const;
+
 	// --- Soft bodies (non-goal: return invalid RID / no-op) ---
 	RID _soft_body_create() override;
 	void _soft_body_update_rendering_server(const RID& p_body, PhysicsServer3DRenderingServerHandler* p_rendering_server_handler) override;
