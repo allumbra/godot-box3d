@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cs3droptest01"]
+
+[ext_resource type="Script" path="res://CSharpDropTest.cs" id="1_csdrop"]
+
+[node name="CSharpDropTest" type="Node3D"]
+script = ExtResource("1_csdrop")
