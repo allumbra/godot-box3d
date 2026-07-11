@@ -62,17 +62,18 @@ Two honest caveats cut both ways:
    while box3d's equivalent leg is blocked by the crash below — neither engine
    has a clean "reused world is deterministic" result yet.
 
-## Crash found (and lost) by the harness — treat as open
+## Crash found by the harness — root-caused and FIXED
 
-On the pre-wheel-joint build of the extension, pass 2 segfaulted 100% (4/4
-runs) on the first step after free-all-bodies + respawn. On the current build
-(which added joint lifecycle fixes — none in the no-joint path this scene
-uses) the crash does not reproduce, and targeted probes of the same pattern
-(free-only / respawn-only / keep-ground / free+respawn) all survive. A crash
-that is binary-layout-sensitive and vanishes on rebuild is characteristically
-latent UB (likely a stale pointer read that usually lands in still-mapped
-memory). **Status: not root-caused; needs an ASAN or gdb pass (neither
-available on this machine yet — no sudo). Tracked as an M4 item.**
+Pass 2 originally segfaulted 100% on the first step after free-all-bodies +
+respawn. Root cause (use-after-free in the wrapper): `Box3DSpace3D::step()`
+queues per-body state syncs holding raw `Box3DBodyImpl3D*`, consumed a frame
+later by `flush_queries()`; a body freed in between (idle `_process`) left a
+dangling pointer that the next flush invoked a Callable on. Fixed by purging
+`pending_state_syncs` in `Box3DSpace3D::unregister_body` (the single choke
+point for free and space-change). Verified: 3× full two-pass runs, exit 0,
+hashes unchanged; instrumentation before the fix showed 4 of 5 queued syncs
+pointing at freed bodies. `pending_area_events` audited — stores values, not
+pointers, unaffected.
 
 ## Notes for the game project (BRCT)
 

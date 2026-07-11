@@ -53,7 +53,7 @@ public:
 
 	void register_body(Box3DBodyImpl3D* p_body) { bodies.insert(p_body); }
 
-	void unregister_body(Box3DBodyImpl3D* p_body) { bodies.erase(p_body); }
+	void unregister_body(Box3DBodyImpl3D* p_body);
 
 	void register_area(Box3DAreaImpl3D* p_area) { areas.insert(p_area); }
 

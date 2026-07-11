@@ -207,6 +207,19 @@ void Box3DSpace3D::_queue_area_event(
 	}
 }
 
+void Box3DSpace3D::unregister_body(Box3DBodyImpl3D* p_body) {
+	bodies.erase(p_body);
+	// A body can be freed (or moved to another space) between the step() that queued its
+	// state sync and the flush_queries() that consumes it -- e.g. a RigidBody3D freed during
+	// idle processing, after that frame's step() but before the next frame's flush. Drop any
+	// queued syncs referencing it so flush_queries() never dereferences freed memory.
+	for (uint32_t i = pending_state_syncs.size(); i > 0; --i) {
+		if (pending_state_syncs[i - 1].body == p_body) {
+			pending_state_syncs.remove_at(i - 1);
+		}
+	}
+}
+
 void Box3DSpace3D::flush_queries() {
 	flushing_queries = true;
 
