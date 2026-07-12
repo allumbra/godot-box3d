@@ -1,6 +1,7 @@
 #include "register_types.hpp"
 
 #include "misc/box3d_globals.hpp"
+#include "misc/box3d_replay_player.hpp"
 #include "objects/box3d_physics_direct_body_state_3d.hpp"
 #include "objects/box3d_wheel_joint_3d.hpp"
 #include "servers/box3d_physics_server_3d.hpp"
@@ -38,6 +39,7 @@ void initialize_box3d_module(ModuleInitializationLevel p_level) {
 		// Scene-facing nodes (Box3D features with no Godot equivalent) register at
 		// SCENE level so they appear in the editor's node dialog.
 		GDREGISTER_CLASS(Box3DWheelJoint3D);
+		GDREGISTER_CLASS(Box3DReplayPlayer);
 	}
 }
 

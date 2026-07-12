@@ -31,11 +31,11 @@ count; Jolt control = same script in a minimal project with
   bodies to sleep vs box3d's 49/500, so the engines were not simulating the
   same amount of active work. Sleep-heuristic differences, not raw solver cost,
   may dominate that cell.
-- \* One box3d 1000-body run segfaulted (2/3 runs valid). **Caveat: the
-  benchmark ran concurrently with extension rebuilds that hot-swapped the .so
-  in test_project, which can itself crash a running process — this cell needs a
-  clean rerun before the crash is treated as a real finding.** Tracked as an
-  open item.
+- \* One box3d 1000-body run segfaulted during the original matrix, which ran
+  concurrently with extension rebuilds hot-swapping the .so under the running
+  process. A clean 3× rerun on a quiescent system reproduced **zero** crashes
+  (10093 / 9546 / 19919 ms — the outlier being system-load variance), so the
+  crash is attributed to the mid-run .so swap, not the extension.
 
 ## Reproduce
 

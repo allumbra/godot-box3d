@@ -53,5 +53,24 @@ func _process(_delta: float) -> bool:
 			print("RESULT: PASS - recording replays and validates deterministically")
 		else:
 			print("RESULT: FAIL - replay validation failed")
+
+		# Replay player: step through all frames, seek backward, check divergence.
+		var player := Box3DReplayPlayer.new()
+		if not player.open(bytes, 1):
+			print("RESULT: FAIL - replay player could not open recording")
+			quit()
+			return true
+		var stepped := 0
+		while player.step_frame():
+			stepped += 1
+		print("Player stepped ", stepped, "/", player.get_frame_count(),
+			" frames, diverged: ", player.has_diverged())
+		player.seek_frame(10)
+		var at_10: int = player.get_frame()
+		if stepped == player.get_frame_count() and not player.has_diverged() and at_10 == 10:
+			print("RESULT: PASS - replay player steps, seeks (frame ", at_10, "), no divergence")
+		else:
+			print("RESULT: FAIL - player stepped=", stepped, " seek=", at_10,
+				" diverged=", player.has_diverged())
 		quit()
 	return false
