@@ -1,15 +1,16 @@
 extends Node3D
 
-# Box3D showcase: cycles through 8 demos, 8 s each, auto-advancing and looping.
-# Number keys 1-8 jump to a demo. Each demo is built programmatically when it
-# becomes active and freed on switch (all bodies/joints are plain Godot nodes;
+# Box3D showcase: cycles through 12 demos, 8 s each, auto-advancing and looping.
+# Number keys 1-9, 0, -, = jump to a demo. Each demo is built programmatically when
+# it becomes active and freed on switch (all bodies/joints are plain Godot nodes;
 # Box3D is the active physics engine per project.godot).
 
 const DEMO_SECONDS := 8.0
-const DEMO_COUNT := 8
+const DEMO_COUNT := 12
 const DEMO_NAMES := [
 	"Stacking", "Ragdoll", "Character", "CCD",
 	"Driving", "Ragdoll Pile", "Dominoes & Jenga", "Bounce House",
+	"Character Course", "Card House", "Explosion", "Junkyard",
 ]
 
 # --- driving tuning (Box3DWheelJoint3D) ---
@@ -39,6 +40,10 @@ var cam_cfg := [
 	[Vector3(0, 1.5, 0), 11.0, 6.0],
 	[Vector3(2.5, 1.0, 1.5), 15.0, 8.0],
 	[Vector3(0, 2.0, 0), 9.5, 4.0],
+	[Vector3(0.5, 0.9, 0), 17.0, 9.0],
+	[Vector3(0, 1.3, 0), 8.0, 4.5],
+	[Vector3(0, 1.4, 0), 13.0, 5.5],
+	[Vector3(0, 1.2, 0), 13.0, 6.5],
 ]
 
 # --- stacking state ---
@@ -58,6 +63,23 @@ var car_front: Array = []
 var pile_count := 0
 # --- bounce house state ---
 var bounce_bodies: Array = []
+# --- character course state ---
+var cc_pos := Vector3.ZERO
+var cc_vel := Vector3.ZERO
+var cc_mesh: MeshInstance3D
+var cc_platform: AnimatableBody3D
+var cc_platform_x := 0.0
+# --- card house state ---
+var card_bodies: Array = []
+var card_hit := false
+# --- explosion state ---
+var expl_done := false
+var flash: MeshInstance3D
+var flash_t := -1.0
+# --- junkyard state ---
+var junk_count := 0
+var junk_imploded := false
+var junk_exploded := false
 
 # --- materials ---
 var mat_ground: StandardMaterial3D
@@ -75,6 +97,9 @@ var mat_wheel: StandardMaterial3D
 var mat_domino: StandardMaterial3D
 var mat_jenga: StandardMaterial3D
 var mat_ball: StandardMaterial3D
+var mat_card: StandardMaterial3D
+var mat_platform: StandardMaterial3D
+var mat_flash: StandardMaterial3D
 
 
 func _ready() -> void:
@@ -106,7 +131,7 @@ func _ready() -> void:
 	label.position = Vector2(16, 12)
 	layer.add_child(label)
 
-	# Optional: SHOWCASE_START=<0-7> jumps straight to a demo (used for fast
+	# Optional: SHOWCASE_START=<0-11> jumps straight to a demo (used for fast
 	# single-demo verification renders). Defaults to the first demo.
 	var start := 0
 	var start_env := OS.get_environment("SHOWCASE_START")
@@ -131,6 +156,12 @@ func _make_materials() -> void:
 	mat_domino = _mat(Color(0.4, 0.75, 0.85))
 	mat_jenga = _mat(Color(0.8, 0.65, 0.4))
 	mat_ball = _mat(Color(0.95, 0.85, 0.3))
+	mat_card = _mat(Color(0.9, 0.9, 0.95))
+	mat_platform = _mat(Color(0.9, 0.55, 0.2))
+	mat_flash = _mat(Color(1.0, 0.5, 0.15))
+	mat_flash.emission_enabled = true
+	mat_flash.emission = Color(1.0, 0.4, 0.1)
+	mat_flash.emission_energy_multiplier = 4.0
 
 
 func _mat(c: Color) -> StandardMaterial3D:
@@ -150,6 +181,10 @@ func _input(event: InputEvent) -> void:
 			KEY_6: _switch_to(5)
 			KEY_7: _switch_to(6)
 			KEY_8: _switch_to(7)
+			KEY_9: _switch_to(8)
+			KEY_0: _switch_to(9)
+			KEY_MINUS: _switch_to(10)
+			KEY_EQUAL: _switch_to(11)
 
 
 func _switch_to(idx: int) -> void:
@@ -163,6 +198,15 @@ func _switch_to(idx: int) -> void:
 	car_front.clear()
 	pile_count = 0
 	bounce_bodies.clear()
+	cc_platform = null
+	card_bodies.clear()
+	card_hit = false
+	expl_done = false
+	flash = null
+	flash_t = -1.0
+	junk_count = 0
+	junk_imploded = false
+	junk_exploded = false
 
 	if demo_root:
 		demo_root.queue_free()
@@ -178,6 +222,10 @@ func _switch_to(idx: int) -> void:
 		5: _build_pile()
 		6: _build_dominoes_jenga()
 		7: _build_bounce_house()
+		8: _build_character_course()
+		9: _build_card_house()
+		10: _build_explosion()
+		11: _build_junkyard()
 
 
 func _process(delta: float) -> void:
@@ -197,6 +245,46 @@ func _process(delta: float) -> void:
 		_spawn_pile_ragdoll(pile_count)
 		pile_count += 1
 
+	# Card house: unfreeze the cards and roll a heavy sphere in at t = 5 s.
+	if current == 9 and not card_hit and demo_time >= 5.0:
+		card_hit = true
+		for c in card_bodies:
+			if is_instance_valid(c):
+				c.freeze = false
+		var s := _rigid_sphere(Vector3(-4.5, 0.5, 0), 0.5, mat_heavy)
+		s.mass = 8.0
+		s.linear_velocity = Vector3(9.0, 0, 0)
+
+	# Explosion: fire the radial blast + red flash at t = 3 s, then fade the flash.
+	if current == 10:
+		if not expl_done and demo_time >= 3.0:
+			expl_done = true
+			_explode(Vector3(0, 0.5, 0), 4.0, 2.0, 8.0)
+			flash = _spawn_flash(Vector3(0, 0.5, 0))
+			flash_t = demo_time
+		if flash and is_instance_valid(flash):
+			var age := demo_time - flash_t
+			if age > 0.4:
+				flash.queue_free()
+				flash = null
+			else:
+				var s := 1.0 + age * 12.0
+				flash.scale = Vector3(s, s, s)
+
+	# Junkyard: fill the pile over ~1 s, implode at t = 4 s, explode at t = 6 s.
+	if current == 11:
+		if junk_count < 50 and demo_time < 1.2:
+			var target := int(min(50, (demo_time / 1.0) * 50.0)) + 1
+			while junk_count < target and junk_count < 50:
+				_spawn_junk(junk_count)
+				junk_count += 1
+		if not junk_imploded and demo_time >= 4.0:
+			junk_imploded = true
+			_explode(Vector3(0, 1.0, 0), 8.0, 1.5, -9.0)
+		if not junk_exploded and demo_time >= 6.0:
+			junk_exploded = true
+			_explode(Vector3(0, 1.0, 0), 8.0, 1.5, 16.0)
+
 	# Slow camera orbit around the active demo (tracks the car while driving).
 	orbit_angle += delta * 0.35
 	var cfg = cam_cfg[current]
@@ -214,6 +302,7 @@ func _physics_process(delta: float) -> void:
 		2: _step_character(delta)
 		4: _step_driving()
 		7: _step_bounce()
+		8: _step_character_course(delta)
 
 
 # ---------------------------------------------------------------------------
@@ -634,6 +723,229 @@ func _step_bounce() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Demo 9: Character Course (kinematic mover over a richer level)
+# ---------------------------------------------------------------------------
+
+func _build_character_course() -> void:
+	_ground(Vector3(60, 1, 60))
+	cc_pos = Vector3(-7.0, 0.9, 0.0)
+	cc_vel = Vector3.ZERO
+
+	# 4-step staircase (0.25 m risers) rising to y = 1.0.
+	for i in range(4):
+		var h := 0.25 * (i + 1)
+		var step := _static_box(Vector3(-5.6 + i * 0.8, h * 0.5, 0), Vector3(0.8, h, 3.0), mat_obstacle)
+		step.name = "step%d" % i
+
+	# Top landing, a narrow bridge, a gap (filled by the platform), a far landing.
+	_static_box(Vector3(-1.8, 0.5, 0), Vector3(2.0, 1.0, 3.0), mat_obstacle)      # top landing
+	_static_box(Vector3(0.5, 0.9, 0), Vector3(2.6, 0.2, 1.0), mat_wall)           # narrow bridge
+	_static_box(Vector3(4.4, 0.5, 0), Vector3(1.6, 1.0, 3.0), mat_obstacle)       # far landing
+
+	# Descending ramp back to the ground (+X end lower).
+	var ramp := _static_box(Vector3(6.6, 0.55, 0), Vector3(3.0, 0.3, 3.0), mat_obstacle)
+	ramp.transform = Transform3D(Basis(Vector3(0, 0, 1), deg_to_rad(-20)), Vector3(6.6, 0.6, 0))
+
+	# Moving kinematic platform that ferries the mover across the gap.
+	cc_platform = AnimatableBody3D.new()
+	var pcs := CollisionShape3D.new()
+	var pbox := BoxShape3D.new()
+	pbox.size = Vector3(1.8, 0.2, 1.8)
+	pcs.shape = pbox
+	cc_platform.add_child(pcs)
+	cc_platform.position = Vector3(2.5, 0.9, 0)
+	cc_platform_x = 2.5
+	_mesh_for(cc_platform, pbox.size, mat_platform)
+	demo_root.add_child(cc_platform)
+
+	# Visible capsule (no physics body — driven by the mover API).
+	cc_mesh = MeshInstance3D.new()
+	var cmesh := CapsuleMesh.new()
+	cmesh.radius = CH_RADIUS
+	cmesh.height = CH_HALF * 2.0 + CH_RADIUS * 2.0
+	cc_mesh.mesh = cmesh
+	cc_mesh.material_override = mat_char
+	cc_mesh.position = cc_pos
+	demo_root.add_child(cc_mesh)
+
+
+func _step_character_course(delta: float) -> void:
+	if cc_mesh == null or not server.has_method("space_collide_mover"):
+		return
+	var space: RID = get_world_3d().space
+
+	# Ferry the platform along X and carry the mover if it is standing on it.
+	var px := 2.5 + 0.5 * (1.0 - cos(demo_time * 1.7))
+	if is_instance_valid(cc_platform):
+		var dx := px - cc_platform_x
+		cc_platform.position = Vector3(px, 0.9, 0)
+		if absf(cc_pos.x - px) < 0.9 and absf(cc_pos.z) < 0.9 and absf(cc_pos.y - 1.9) < 0.4:
+			cc_pos.x += dx
+		cc_platform_x = px
+
+	# Head +X along the course; in the gap, only step forward when floor is ahead.
+	var want_x := 2.5
+	if cc_pos.x > 1.6 and cc_pos.x < 3.7:
+		var ahead := cc_pos.x + 0.5
+		if ahead <= px - 0.9 or ahead >= px + 0.9:
+			want_x = 0.0
+	cc_vel.x = want_x
+	cc_vel.z = -cc_pos.z * 2.0
+	cc_vel.y -= 9.8 * delta
+
+	var c1 := cc_pos + Vector3(0, -CH_HALF, 0)
+	var c2 := cc_pos + Vector3(0, CH_HALF, 0)
+	var planes: Array = server.space_collide_mover(space, c1, c2, CH_RADIUS, 0xFFFFFFFF)
+	var solved: Dictionary = server.solve_mover_planes(cc_vel * delta, planes)
+	cc_pos += solved["delta"]
+	cc_vel = server.clip_mover_velocity(cc_vel, solved["planes"])
+
+	if cc_pos.x > 8.5:  # completed the course — loop back to the start
+		cc_pos = Vector3(-7.0, 0.9, 0.0)
+		cc_vel = Vector3.ZERO
+	cc_mesh.position = cc_pos
+
+
+# ---------------------------------------------------------------------------
+# Demo 10: Card House
+# ---------------------------------------------------------------------------
+
+func _build_card_house() -> void:
+	# Low-friction floor.
+	var floor_mat := PhysicsMaterial.new()
+	floor_mat.friction = 0.4
+	var g := StaticBody3D.new()
+	var gcs := CollisionShape3D.new()
+	var gbox := BoxShape3D.new()
+	gbox.size = Vector3(40, 1, 40)
+	gcs.shape = gbox
+	g.add_child(gcs)
+	g.position = Vector3(0, -0.5, 0)
+	g.physics_material_override = floor_mat
+	_mesh_for(g, gbox.size, mat_ground)
+	demo_root.add_child(g)
+
+	# 3-level house of cards: leaning tents bridged by flat cards. Cards are frozen
+	# so the house stands until the sphere hits (then they release and collapse).
+	_card_tent(-0.9, 0.0)
+	_card_tent(0.0, 0.0)
+	_card_tent(0.9, 0.0)
+	_card_flat(-0.45, 0.88)
+	_card_flat(0.45, 0.88)
+
+	_card_tent(-0.45, 0.89)
+	_card_tent(0.45, 0.89)
+	_card_flat(0.0, 1.77)
+
+	_card_tent(0.0, 1.78)
+
+
+func _card_tent(cx: float, base_y: float) -> void:
+	# Two thin cards leaning together into an A-frame.
+	_card(Vector3(cx - 0.22, base_y + 0.45, 0), deg_to_rad(-15))
+	_card(Vector3(cx + 0.22, base_y + 0.45, 0), deg_to_rad(15))
+
+
+func _card(pos: Vector3, rotz: float) -> void:
+	var c := RigidBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.02, 0.9, 0.6)
+	cs.shape = box
+	c.add_child(cs)
+	c.mass = 0.05
+	c.transform = Transform3D(Basis(Vector3(0, 0, 1), rotz), pos)
+	c.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	c.freeze = true
+	_mesh_for(c, box.size, mat_card)
+	demo_root.add_child(c)
+	card_bodies.append(c)
+
+
+func _card_flat(cx: float, y: float) -> void:
+	var c := RigidBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(0.9, 0.02, 0.6)
+	cs.shape = box
+	c.add_child(cs)
+	c.mass = 0.05
+	c.position = Vector3(cx, y, 0)
+	c.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	c.freeze = true
+	_mesh_for(c, box.size, mat_card)
+	demo_root.add_child(c)
+	card_bodies.append(c)
+
+
+# ---------------------------------------------------------------------------
+# Demo 11: Explosion (server.space_explode radial impulse)
+# ---------------------------------------------------------------------------
+
+func _build_explosion() -> void:
+	_ground(Vector3(60, 1, 60))
+
+	# 6 x 6 x 3 wall of small boxes (boxes are hulls — the blast acts on them).
+	for i in range(6):
+		for j in range(6):
+			for k in range(3):
+				var pos := Vector3((i - 2.5) * 0.42, 0.22 + j * 0.42, (k - 1) * 0.42)
+				var b := _rigid_box(pos, Vector3(0.4, 0.4, 0.4), mat_box)
+				b.mass = 0.3
+
+	# A few spheres and capsules scattered in front of the wall.
+	_rigid_sphere(Vector3(-1.2, 0.3, 2.2), 0.3, mat_ccd_on).mass = 0.4
+	_rigid_sphere(Vector3(1.0, 0.3, 2.6), 0.3, mat_ccd_off).mass = 0.4
+	_rigid_sphere(Vector3(0.2, 0.3, 3.0), 0.25, mat_ball).mass = 0.3
+	_rigid_capsule(Vector3(-0.6, 0.5, 2.0), 0.2, 0.4, mat_char).mass = 0.4
+	_rigid_capsule(Vector3(1.6, 0.5, 2.0), 0.2, 0.4, mat_limb).mass = 0.4
+
+
+func _spawn_flash(pos: Vector3) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.4
+	sm.height = 0.8
+	mi.mesh = sm
+	mi.material_override = mat_flash
+	mi.position = pos
+	demo_root.add_child(mi)
+	return mi
+
+
+# ---------------------------------------------------------------------------
+# Demo 12: Junkyard (implosion then explosion)
+# ---------------------------------------------------------------------------
+
+func _build_junkyard() -> void:
+	_ground(Vector3(60, 1, 60))
+	junk_count = 0
+
+
+func _spawn_junk(i: int) -> void:
+	var m := _mat(Color.from_hsv(fposmod(i * 0.13, 1.0), 0.55, 0.9))
+	var x := sin(i * 2.3) * 1.1
+	var z := cos(i * 1.9) * 1.1
+	var y := 1.4 + (i % 10) * 0.24
+	var b: RigidBody3D
+	match i % 3:
+		0:
+			var s := 0.3 + (i % 3) * 0.08
+			b = _rigid_box(Vector3(x, y, z), Vector3(s, s * 1.4, s), m)
+		1:
+			b = _rigid_sphere(Vector3(x, y, z), 0.22 + (i % 4) * 0.04, m)
+		_:
+			b = _rigid_capsule(Vector3(x, y, z), 0.16, 0.35, m)
+	b.mass = 0.5
+
+
+func _explode(center: Vector3, radius: float, falloff: float, impulse: float) -> void:
+	if not server.has_method("space_explode"):
+		return
+	server.space_explode(get_world_3d().space, center, radius, falloff, impulse, 0xFFFFFFFF)
+
+
+# ---------------------------------------------------------------------------
 # Builders
 # ---------------------------------------------------------------------------
 
@@ -675,6 +987,39 @@ func _rigid_sphere(pos: Vector3, radius: float, mat: StandardMaterial3D) -> Rigi
 	sm.radius = radius
 	sm.height = radius * 2.0
 	mi.mesh = sm
+	mi.material_override = mat
+	b.add_child(mi)
+	demo_root.add_child(b)
+	return b
+
+
+func _static_box(pos: Vector3, size: Vector3, mat: StandardMaterial3D) -> StaticBody3D:
+	var b := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	cs.shape = box
+	b.add_child(cs)
+	b.position = pos
+	_mesh_for(b, size, mat)
+	demo_root.add_child(b)
+	return b
+
+
+func _rigid_capsule(pos: Vector3, radius: float, seg: float, mat: StandardMaterial3D) -> RigidBody3D:
+	var b := RigidBody3D.new()
+	var cs := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = radius
+	cap.height = seg + radius * 2.0
+	cs.shape = cap
+	b.add_child(cs)
+	b.position = pos
+	var mi := MeshInstance3D.new()
+	var cm := CapsuleMesh.new()
+	cm.radius = radius
+	cm.height = seg + radius * 2.0
+	mi.mesh = cm
 	mi.material_override = mat
 	b.add_child(mi)
 	demo_root.add_child(b)
