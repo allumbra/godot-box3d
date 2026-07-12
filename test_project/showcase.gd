@@ -1,12 +1,24 @@
 extends Node3D
 
-# Box3D showcase: cycles through 4 demos, 8 s each, auto-advancing and looping.
-# Number keys 1-4 jump to a demo. Each demo is built programmatically when it
+# Box3D showcase: cycles through 8 demos, 8 s each, auto-advancing and looping.
+# Number keys 1-8 jump to a demo. Each demo is built programmatically when it
 # becomes active and freed on switch (all bodies/joints are plain Godot nodes;
 # Box3D is the active physics engine per project.godot).
 
 const DEMO_SECONDS := 8.0
-const DEMO_NAMES := ["Stacking", "Ragdoll", "Character", "CCD"]
+const DEMO_COUNT := 8
+const DEMO_NAMES := [
+	"Stacking", "Ragdoll", "Character", "CCD",
+	"Driving", "Ragdoll Pile", "Dominoes & Jenga", "Bounce House",
+]
+
+# --- driving tuning (Box3DWheelJoint3D) ---
+const DRIVE_SPEED := 18.0
+const DRIVE_TORQUE := 90.0
+const STEER_ANGLE := 0.45
+const WHEEL_RADIUS := 0.35
+# --- bounce house ---
+const BOUNCE_SPEED := 40.0
 
 var demo_root: Node3D
 var camera: Camera3D
@@ -23,6 +35,10 @@ var cam_cfg := [
 	[Vector3(0, 2, 0), 8.0, 4.0],
 	[Vector3(0, 1, 0), 13.0, 9.0],
 	[Vector3(0, 2, 0), 11.0, 4.0],
+	[Vector3(0, 1.5, 0), 15.0, 7.0],
+	[Vector3(0, 1.5, 0), 11.0, 6.0],
+	[Vector3(2.5, 1.0, 1.5), 15.0, 8.0],
+	[Vector3(0, 2.0, 0), 9.5, 4.0],
 ]
 
 # --- stacking state ---
@@ -34,6 +50,14 @@ var ch_pos := Vector3.ZERO
 var ch_vel := Vector3.ZERO
 var ch_angle := 0.0
 var ch_mesh: MeshInstance3D
+# --- driving state ---
+var car_chassis: RigidBody3D
+var car_rear: Array = []
+var car_front: Array = []
+# --- ragdoll pile state ---
+var pile_count := 0
+# --- bounce house state ---
+var bounce_bodies: Array = []
 
 # --- materials ---
 var mat_ground: StandardMaterial3D
@@ -46,6 +70,11 @@ var mat_obstacle: StandardMaterial3D
 var mat_ccd_on: StandardMaterial3D
 var mat_ccd_off: StandardMaterial3D
 var mat_wall: StandardMaterial3D
+var mat_car: StandardMaterial3D
+var mat_wheel: StandardMaterial3D
+var mat_domino: StandardMaterial3D
+var mat_jenga: StandardMaterial3D
+var mat_ball: StandardMaterial3D
 
 
 func _ready() -> void:
@@ -77,7 +106,13 @@ func _ready() -> void:
 	label.position = Vector2(16, 12)
 	layer.add_child(label)
 
-	_switch_to(0)
+	# Optional: SHOWCASE_START=<0-7> jumps straight to a demo (used for fast
+	# single-demo verification renders). Defaults to the first demo.
+	var start := 0
+	var start_env := OS.get_environment("SHOWCASE_START")
+	if start_env != "":
+		start = clampi(int(start_env), 0, DEMO_COUNT - 1)
+	_switch_to(start)
 
 
 func _make_materials() -> void:
@@ -91,6 +126,11 @@ func _make_materials() -> void:
 	mat_ccd_on = _mat(Color(0.3, 0.9, 0.4))
 	mat_ccd_off = _mat(Color(0.9, 0.35, 0.35))
 	mat_wall = _mat(Color(0.7, 0.72, 0.78))
+	mat_car = _mat(Color(0.85, 0.25, 0.3))
+	mat_wheel = _mat(Color(0.15, 0.15, 0.18))
+	mat_domino = _mat(Color(0.4, 0.75, 0.85))
+	mat_jenga = _mat(Color(0.8, 0.65, 0.4))
+	mat_ball = _mat(Color(0.95, 0.85, 0.3))
 
 
 func _mat(c: Color) -> StandardMaterial3D:
@@ -106,12 +146,23 @@ func _input(event: InputEvent) -> void:
 			KEY_2: _switch_to(1)
 			KEY_3: _switch_to(2)
 			KEY_4: _switch_to(3)
+			KEY_5: _switch_to(4)
+			KEY_6: _switch_to(5)
+			KEY_7: _switch_to(6)
+			KEY_8: _switch_to(7)
 
 
 func _switch_to(idx: int) -> void:
 	current = idx
 	demo_time = 0.0
-	label.text = "%d / 4  —  %s" % [idx + 1, DEMO_NAMES[idx]]
+	label.text = "%d / %d  —  %s" % [idx + 1, DEMO_COUNT, DEMO_NAMES[idx]]
+
+	# Reset per-demo state and drop references into the demo being torn down.
+	car_chassis = null
+	car_rear.clear()
+	car_front.clear()
+	pile_count = 0
+	bounce_bodies.clear()
 
 	if demo_root:
 		demo_root.queue_free()
@@ -123,12 +174,16 @@ func _switch_to(idx: int) -> void:
 		1: _build_ragdoll()
 		2: _build_character()
 		3: _build_ccd()
+		4: _build_driving()
+		5: _build_pile()
+		6: _build_dominoes_jenga()
+		7: _build_bounce_house()
 
 
 func _process(delta: float) -> void:
 	demo_time += delta
 	if demo_time >= DEMO_SECONDS:
-		_switch_to((current + 1) % 4)
+		_switch_to((current + 1) % DEMO_COUNT)
 
 	# Stacking: lob a heavy sphere into the pyramid at t = 4 s.
 	if current == 0 and not stack_sphere_spawned and demo_time >= 4.0:
@@ -137,19 +192,28 @@ func _process(delta: float) -> void:
 		s.mass = 12.0
 		s.linear_velocity = Vector3(-14, 1.5, 0)
 
-	# Slow camera orbit around the active demo.
+	# Ragdoll pile: drop one humanoid roughly every 0.34 s (staggered over ~2 s).
+	if current == 5 and pile_count < 6 and demo_time >= pile_count * 0.34:
+		_spawn_pile_ragdoll(pile_count)
+		pile_count += 1
+
+	# Slow camera orbit around the active demo (tracks the car while driving).
 	orbit_angle += delta * 0.35
 	var cfg = cam_cfg[current]
 	var target: Vector3 = cfg[0]
 	var r: float = cfg[1]
 	var h: float = cfg[2]
+	if current == 4 and is_instance_valid(car_chassis):
+		target = car_chassis.global_position
 	camera.position = target + Vector3(cos(orbit_angle) * r, h, sin(orbit_angle) * r)
 	camera.look_at(target, Vector3.UP)
 
 
 func _physics_process(delta: float) -> void:
-	if current == 2:
-		_step_character(delta)
+	match current:
+		2: _step_character(delta)
+		4: _step_driving()
+		7: _step_bounce()
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +238,7 @@ func _build_stacking() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Demo 2: Ragdoll
+# Demo 2: Ragdoll (single, tumbling over a ledge)
 # ---------------------------------------------------------------------------
 
 func _build_ragdoll() -> void:
@@ -191,11 +255,13 @@ func _build_ragdoll() -> void:
 	_mesh_for(ledge, lbox.size, mat_obstacle)
 	demo_root.add_child(ledge)
 
-	# Humanoid built in local (upright) space, then dropped from ~3 m already tilted
-	# so it topples over the ledge edge and tumbles instead of landing on its feet.
+	# Dropped from ~3 m already tilted so it topples over the ledge and tumbles.
 	var spawn := Transform3D(Basis(Vector3(0, 0, 1), deg_to_rad(62)), Vector3(-0.6, 3.4, 0))
-	var drift := Vector3(2.5, 0, 0) # horizontal momentum carries it over the edge
+	_spawn_ragdoll(spawn, Vector3(2.5, 0, 0))
 
+
+# Builds one jointed humanoid in the given spawn frame with an initial velocity.
+func _spawn_ragdoll(spawn: Transform3D, drift: Vector3) -> void:
 	var torso := _capsule_body(spawn, Vector3(0, 0.0, 0), 0.22, 0.7, mat_limb, drift)
 	var head := _capsule_body(spawn, Vector3(0, 0.72, 0), 0.18, 0.14, mat_head, drift)
 
@@ -234,7 +300,6 @@ func _pin(a: PhysicsBody3D, b: PhysicsBody3D, at: Vector3) -> void:
 func _hinge(a: PhysicsBody3D, b: PhysicsBody3D, at: Vector3, lo: float, hi: float) -> void:
 	var j := HingeJoint3D.new()
 	j.position = at
-	# Hinge axis along Z (local x rotated) so elbows/knees fold in the view plane.
 	j.rotation_degrees = Vector3(0, 90, 0)
 	demo_root.add_child(j)
 	j.node_a = j.get_path_to(a)
@@ -255,7 +320,6 @@ func _build_character() -> void:
 	ch_pos = Vector3(4.0, 0.95, 0.0)
 	ch_vel = Vector3.ZERO
 
-	# Obstacle course on the walking circle (radius 4): a step and a ramp.
 	var step := StaticBody3D.new()
 	var scs := CollisionShape3D.new()
 	var sbox := BoxShape3D.new()
@@ -277,7 +341,6 @@ func _build_character() -> void:
 	_mesh_for(ramp, rbox.size, mat_obstacle)
 	demo_root.add_child(ramp)
 
-	# Visible capsule the mover drives (no physics body).
 	ch_mesh = MeshInstance3D.new()
 	var cmesh := CapsuleMesh.new()
 	cmesh.radius = CH_RADIUS
@@ -293,7 +356,6 @@ func _step_character(delta: float) -> void:
 		return
 	var space: RID = get_world_3d().space
 
-	# Steer horizontally along a circle of radius 4 centred at origin.
 	ch_angle += delta * 0.8
 	var tangent := Vector3(-sin(ch_angle), 0, cos(ch_angle))
 	ch_vel.x = tangent.x * 3.0
@@ -316,7 +378,6 @@ func _step_character(delta: float) -> void:
 func _build_ccd() -> void:
 	_ground(Vector3(60, 1, 60))
 
-	# Wall of thin boxes at x = 0, spheres fired from -x.
 	for row in range(6):
 		for col in range(5):
 			var y := 0.6 + row * 0.9
@@ -324,7 +385,6 @@ func _build_ccd() -> void:
 			var w := _rigid_box(Vector3(0, y, z), Vector3(0.05, 0.85, 0.85), mat_wall)
 			w.mass = 0.5
 
-	# Fast spheres: green use continuous CD (stop at wall), red do not (may tunnel).
 	for i in range(6):
 		var z := (i - 2.5) * 0.8
 		var use_ccd := i % 2 == 0
@@ -334,6 +394,243 @@ func _build_ccd() -> void:
 		s.gravity_scale = 0.0
 		s.continuous_cd = use_ccd
 		s.linear_velocity = Vector3(60, 0, 0)
+
+
+# ---------------------------------------------------------------------------
+# Demo 5: Driving (4-wheel vehicle on Box3DWheelJoint3D)
+# ---------------------------------------------------------------------------
+
+func _build_driving() -> void:
+	_ground(Vector3(200, 1, 200))
+
+	# The wheel axle is world X, so the car travels along Z. Course runs along +Z:
+	# flat approach, a ramp up, then a drop off the high (+Z) end.
+	var ramp := StaticBody3D.new()
+	var rcs := CollisionShape3D.new()
+	var rbox := BoxShape3D.new()
+	rbox.size = Vector3(20.0, 0.4, 10.0)
+	rcs.shape = rbox
+	ramp.add_child(rcs)
+	# Sunk so its low edge is below ground: wheels roll onto the slope smoothly.
+	ramp.transform = Transform3D(Basis(Vector3(1, 0, 0), deg_to_rad(-11)), Vector3(0, 0.75, 3.2))
+	_mesh_for(ramp, rbox.size, mat_obstacle)
+	demo_root.add_child(ramp)
+
+	car_chassis = RigidBody3D.new()
+	var ccs := CollisionShape3D.new()
+	var cbox := BoxShape3D.new()
+	cbox.size = Vector3(1.2, 0.35, 2.4)
+	ccs.shape = cbox
+	car_chassis.add_child(ccs)
+	car_chassis.mass = 20.0
+	car_chassis.position = Vector3(0, 0.6, -5.0)
+	_mesh_for(car_chassis, cbox.size, mat_car)
+	demo_root.add_child(car_chassis)
+
+	# x = axle side, z = front(-)/rear(+); wheels sit below the chassis.
+	_add_wheel(Vector3(-0.75, -0.25, -0.9), true)
+	_add_wheel(Vector3(0.75, -0.25, -0.9), true)
+	_add_wheel(Vector3(-0.75, -0.25, 0.9), false)
+	_add_wheel(Vector3(0.75, -0.25, 0.9), false)
+
+
+func _add_wheel(local_pos: Vector3, is_front: bool) -> void:
+	var wheel := RigidBody3D.new()
+	var cs := CollisionShape3D.new()
+	var sphere := SphereShape3D.new()
+	sphere.radius = WHEEL_RADIUS
+	cs.shape = sphere
+	wheel.add_child(cs)
+	wheel.mass = 2.0
+	wheel.position = car_chassis.position + local_pos
+	var mesh := MeshInstance3D.new()
+	var sphere_mesh := SphereMesh.new()
+	sphere_mesh.radius = WHEEL_RADIUS
+	sphere_mesh.height = WHEEL_RADIUS * 2.0
+	mesh.mesh = sphere_mesh
+	mesh.material_override = mat_wheel
+	wheel.add_child(mesh)
+	demo_root.add_child(wheel)
+
+	var joint := Box3DWheelJoint3D.new()
+	# Joint frame: local X = up (suspension/steer axis), local Z = axle.
+	joint.transform = Transform3D(
+		Basis(Vector3(0, 1, 0), Vector3(0, 0, 1), Vector3(1, 0, 0)),
+		car_chassis.position + local_pos)
+	joint.suspension_enabled = true
+	joint.suspension_hertz = 4.0
+	joint.suspension_damping_ratio = 0.7
+	joint.suspension_limit_enabled = true
+	joint.suspension_limit_lower = -0.15
+	joint.suspension_limit_upper = 0.15
+	# All-wheel drive for reliable ramp climbing; front wheels also steer.
+	joint.motor_enabled = true
+	joint.motor_max_torque = DRIVE_TORQUE
+	joint.motor_speed = 0.0
+	if is_front:
+		joint.steering_enabled = true
+		joint.steering_hertz = 8.0
+		joint.steering_damping_ratio = 1.0
+		joint.steering_max_torque = 200.0
+		joint.steering_limit_enabled = true
+		joint.steering_limit_lower = -STEER_ANGLE
+		joint.steering_limit_upper = STEER_ANGLE
+	demo_root.add_child(joint)
+	joint.node_a = joint.get_path_to(car_chassis)
+	joint.node_b = joint.get_path_to(wheel)
+
+	# Every wheel is driven; front wheels also steer.
+	car_rear.append(joint)
+	if is_front:
+		car_front.append(joint)
+
+
+func _step_driving() -> void:
+	# Ease the throttle in so the car doesn't wheelie off the line.
+	var drive := clampf((demo_time - 0.4) / 1.5, 0.0, 1.0)
+	var steer := sin(demo_time * 0.8) * 0.08
+	for j in car_rear:
+		if is_instance_valid(j):
+			j.motor_speed = drive * DRIVE_SPEED
+	for j in car_front:
+		if is_instance_valid(j):
+			j.steering_target_angle = steer * STEER_ANGLE
+	if OS.get_environment("SHOWCASE_START") != "" and Engine.get_physics_frames() % 30 == 0:
+		print("DRIVE t=%.1f chassis=%s spd=%.2f" % [
+			demo_time, car_chassis.global_position, car_chassis.linear_velocity.length()])
+
+
+# ---------------------------------------------------------------------------
+# Demo 6: Ragdoll Pile
+# ---------------------------------------------------------------------------
+
+func _build_pile() -> void:
+	# Small pit walls keep the pile compact under the camera.
+	_ground(Vector3(40, 1, 40))
+	pile_count = 0
+
+
+func _spawn_pile_ragdoll(i: int) -> void:
+	var ox := sin(i * 1.3) * 0.7
+	var oz := cos(i * 1.7) * 0.7
+	var height := 3.3 + i * 0.15
+	var axis := Vector3(0, 0, 1) if i % 2 == 0 else Vector3(1, 0, 0)
+	var spawn := Transform3D(Basis(axis, deg_to_rad(25 + i * 22)), Vector3(ox, height, oz))
+	_spawn_ragdoll(spawn, Vector3(ox * 0.5, 0, oz * 0.5))
+
+
+# ---------------------------------------------------------------------------
+# Demo 7: Dominoes & Jenga
+# ---------------------------------------------------------------------------
+
+func _build_dominoes_jenga() -> void:
+	_ground(Vector3(80, 1, 80))
+
+	# Curved run of 25 thin dominoes (thin along local Z = fall direction).
+	var n := 25
+	for i in range(n):
+		var p := _domino_pos(i)
+		var dir := (_domino_pos(i + 1) - _domino_pos(i - 1)).normalized()
+		var d := _rigid_box(p, Vector3(0.34, 0.7, 0.08), mat_domino)
+		d.mass = 0.2
+		d.rotation = Vector3(0, atan2(dir.x, dir.z), 0)
+
+	# Nudge sphere: shoved into the first domino to start the cascade.
+	var dir0 := (_domino_pos(1) - _domino_pos(0)).normalized()
+	var nudge := _rigid_sphere(_domino_pos(0) - dir0 * 0.7 + Vector3(0, 0.15, 0), 0.22, mat_heavy)
+	nudge.mass = 1.5
+	nudge.linear_velocity = dir0 * 5.5
+
+	# 8-level Jenga tower off to the side (3 blocks/level, alternating orientation).
+	var cx := 6.0
+	var cz := 3.0
+	for level in range(8):
+		var y := 0.16 + level * 0.29
+		for k in range(3):
+			var off := (k - 1) * 0.3
+			var size: Vector3
+			var pos: Vector3
+			if level % 2 == 0:
+				size = Vector3(0.9, 0.28, 0.28)
+				pos = Vector3(cx, y, cz + off)
+			else:
+				size = Vector3(0.28, 0.28, 0.9)
+				pos = Vector3(cx + off, y, cz)
+			var blk := _rigid_box(pos, size, mat_jenga)
+			blk.mass = 0.3
+
+	# Runner sphere rolls along the ground into the Jenga base and topples it.
+	var runner := _rigid_sphere(Vector3(1.5, 0.4, cz), 0.4, mat_ball)
+	runner.mass = 4.0
+	runner.linear_velocity = Vector3(7.0, 0, 0)
+
+
+func _domino_pos(i: int) -> Vector3:
+	var x := -5.0 + i * 0.45
+	var z := 1.6 * sin(i * 0.16)
+	return Vector3(x, 0.35, z)
+
+
+# ---------------------------------------------------------------------------
+# Demo 8: Bounce House (CCD stress: fast spheres in a thin-walled room)
+# ---------------------------------------------------------------------------
+
+func _build_bounce_house() -> void:
+	var bouncy := PhysicsMaterial.new()
+	bouncy.bounce = 1.0
+	bouncy.friction = 0.0
+
+	# Room: 6 x 4 x 6 interior centred at (0,2,0). Five rendered walls + an
+	# invisible collider on the open front face so nothing escapes.
+	_wall(Vector3(0, -0.05, 0), Vector3(6.2, 0.1, 6.2), bouncy, true)   # floor
+	_wall(Vector3(0, 4.05, 0), Vector3(6.2, 0.1, 6.2), bouncy, true)    # ceiling
+	_wall(Vector3(0, 2, -3.05), Vector3(6.2, 4.0, 0.1), bouncy, true)   # back
+	_wall(Vector3(-3.05, 2, 0), Vector3(0.1, 4.0, 6.2), bouncy, true)   # left
+	_wall(Vector3(3.05, 2, 0), Vector3(0.1, 4.0, 6.2), bouncy, true)    # right
+	_wall(Vector3(0, 2, 3.05), Vector3(6.2, 4.0, 0.1), bouncy, false)   # front (open, invisible collider)
+
+	var dirs := [
+		Vector3(1, 0.6, 0.4), Vector3(-0.7, 1, 0.5), Vector3(0.5, -0.8, 1),
+		Vector3(-1, -0.4, -0.6), Vector3(0.8, 0.9, -0.7), Vector3(-0.6, 0.5, 1),
+		Vector3(1, -0.7, -0.5), Vector3(-0.9, -0.6, 0.8),
+	]
+	var spots := [
+		Vector3(-1.5, 1.5, -1), Vector3(1.5, 2.5, 1), Vector3(0, 1, 1.5),
+		Vector3(-1, 3, 0.5), Vector3(1, 1.5, -1.5), Vector3(-1.5, 2, 1.2),
+		Vector3(1.4, 3.2, -0.8), Vector3(0.5, 2.2, -1.3),
+	]
+	for i in range(8):
+		var b := _rigid_sphere(spots[i], 0.22, mat_ball)
+		b.mass = 1.0
+		b.gravity_scale = 0.0
+		b.continuous_cd = true
+		b.physics_material_override = bouncy
+		b.linear_velocity = dirs[i].normalized() * BOUNCE_SPEED
+		bounce_bodies.append(b)
+
+
+func _wall(pos: Vector3, size: Vector3, mat: PhysicsMaterial, visible: bool) -> void:
+	var w := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	cs.shape = box
+	w.add_child(cs)
+	w.position = pos
+	w.physics_material_override = mat
+	if visible:
+		_mesh_for(w, size, mat_wall)
+	demo_root.add_child(w)
+
+
+func _step_bounce() -> void:
+	# Keep every ball at constant speed so it ricochets indefinitely (also guards
+	# against any restitution loss).
+	for b in bounce_bodies:
+		if is_instance_valid(b):
+			var v: Vector3 = b.linear_velocity
+			if v.length() > 0.01:
+				b.linear_velocity = v.normalized() * BOUNCE_SPEED
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +689,6 @@ func _capsule_body(spawn: Transform3D, local: Vector3, radius: float, seg: float
 	cap.height = seg + radius * 2.0
 	cs.shape = cap
 	b.add_child(cs)
-	# Place in the spawn frame so the whole ragdoll shares one tilt.
 	b.transform = Transform3D(spawn.basis, spawn * local)
 	b.linear_velocity = vel
 	var mi := MeshInstance3D.new()
