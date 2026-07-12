@@ -13,6 +13,7 @@ var bench_start_usec: int = 0
 var max_frame_usec: int = 0
 var body_count: int = 500
 var engine_name: String = "unknown"
+var allow_sleep: bool = true
 
 
 func _initialize() -> void:
@@ -21,6 +22,10 @@ func _initialize() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bodies="):
 			body_count = int(arg.substr(9))
+		elif arg == "--no-sleep":
+			# Fairness mode: sleep heuristics differ between engines, so disabling
+			# sleep compares raw solver cost on identical active-body counts.
+			allow_sleep = false
 
 	_spawn_ground()
 	_spawn_pile(body_count)
@@ -67,6 +72,7 @@ func _spawn_pile(n: int) -> void:
 			shape_node.shape = sphere_shape
 
 		body.add_child(shape_node)
+		body.can_sleep = allow_sleep
 		body.position = Vector3(
 			gx * spacing - origin_offset,
 			2.0 + layer * layer_height,

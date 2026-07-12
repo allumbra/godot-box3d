@@ -37,6 +37,23 @@ count; Jolt control = same script in a minimal project with
   (10093 / 9546 / 19919 ms — the outlier being system-load variance), so the
   crash is attributed to the mid-run .so swap, not the extension.
 
+## Fairness pass — sleep disabled (500 bodies, clean system)
+
+Because the engines' sleep heuristics differ (the 500-body confound above),
+`bench_pile.gd` gained a `--no-sleep` flag (`can_sleep=false` on every body):
+identical active-body counts on both engines, run on a quiescent system.
+
+| Engine | median total_ms | median avg_ms/frame | median max_ms | asleep |
+|---|---|---|---|---|
+| box3d | 1430.1 | 2.38 | 10.1 | 0/500 |
+| Jolt | 1611.0 | 2.68 | 10.1 | 0/500 |
+
+**box3d is ~12% faster at 500 bodies once active-body counts are equalized** —
+the only cell Jolt "won" above was the sleep confound. Note these clean runs
+are ~4× faster in absolute terms than the original matrix, which ran under
+concurrent build load; treat the original table's relative ordering (already
+consistent with this pass) as more meaningful than its absolute numbers.
+
 ## Reproduce
 
 Run each engine/count: `<godot> --headless --fixed-fps 60 --path test_project -s res://bench_pile.gd -- --bodies=<n>`

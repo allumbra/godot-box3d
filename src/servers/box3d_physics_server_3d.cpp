@@ -313,7 +313,14 @@ uint64_t Box3DPhysicsServer3D::_area_get_object_instance_id(const RID& p_area) c
 }
 
 void Box3DPhysicsServer3D::_area_set_param(const RID& p_area, PhysicsServer3D::AreaParameter p_param, const Variant& p_value) {
-	Box3DAreaImpl3D* area = area_owner.get_or_null(p_area);
+	// Godot core addresses a space's default area by the SPACE RID (e.g. World3D
+	// pushing project gravity settings) — mirror the built-in servers' translation.
+	Box3DAreaImpl3D* area = nullptr;
+	if (Box3DSpace3D* space = space_owner.get_or_null(p_area)) {
+		area = space->get_default_area();
+	} else {
+		area = area_owner.get_or_null(p_area);
+	}
 	ERR_FAIL_NULL(area);
 	area->set_param(p_param, p_value);
 }
@@ -325,7 +332,13 @@ void Box3DPhysicsServer3D::_area_set_transform(const RID& p_area, const Transfor
 }
 
 Variant Box3DPhysicsServer3D::_area_get_param(const RID& p_area, PhysicsServer3D::AreaParameter p_param) const {
-	Box3DAreaImpl3D* area = area_owner.get_or_null(p_area);
+	// See _area_set_param: a space RID addresses that space's default area.
+	Box3DAreaImpl3D* area = nullptr;
+	if (Box3DSpace3D* space = space_owner.get_or_null(p_area)) {
+		area = space->get_default_area();
+	} else {
+		area = area_owner.get_or_null(p_area);
+	}
 	ERR_FAIL_NULL_V(area, Variant());
 	return area->get_param(p_param);
 }
