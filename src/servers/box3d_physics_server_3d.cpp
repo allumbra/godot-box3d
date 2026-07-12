@@ -3,7 +3,9 @@
 #include "../joints/box3d_hinge_joint_impl_3d.hpp"
 #include "../joints/box3d_joint_impl_3d.hpp"
 #include "../joints/box3d_pin_joint_impl_3d.hpp"
+#include "../joints/box3d_cone_twist_joint_impl_3d.hpp"
 #include "../joints/box3d_distance_joint_impl_3d.hpp"
+#include "../joints/box3d_g6dof_joint_impl_3d.hpp"
 #include "../joints/box3d_motor_joint_impl_3d.hpp"
 #include "../joints/box3d_slider_joint_impl_3d.hpp"
 #include "../joints/box3d_weld_joint_impl_3d.hpp"
@@ -1537,32 +1539,73 @@ double Box3DPhysicsServer3D::_slider_joint_get_param(const RID& p_joint, Physics
 }
 
 void Box3DPhysicsServer3D::_joint_make_cone_twist(const RID& p_joint, const RID& p_body_a, const Transform3D& p_local_ref_a, const RID& p_body_b, const Transform3D& p_local_ref_b) {
-	ERR_FAIL_MSG("Box3D: ConeTwistJoint3D is not supported in this version of the Box3D extension.");
+	_joint_clear(p_joint);
+
+	Box3DBodyImpl3D* body_a = body_owner.get_or_null(p_body_a);
+	Box3DBodyImpl3D* body_b = body_owner.get_or_null(p_body_b);
+	ERR_FAIL_NULL(body_a);
+	ERR_FAIL_NULL(body_b);
+
+	// Godot's cone is centered on the joint frame's local X axis; box3d's spherical
+	// cone on frame A's local Z. Remap X onto Z on both frames.
+	const Basis x_to_z(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0));
+	const Transform3D frame_a = p_local_ref_a * Transform3D(x_to_z);
+	const Transform3D frame_b = p_local_ref_b * Transform3D(x_to_z);
+
+	auto* joint = memnew(Box3DConeTwistJointImpl3D(body_a, body_b, frame_a, frame_b));
+	joint->set_rid(p_joint);
+	joint_owner.replace(p_joint, joint);
+	joint->rebuild();
 }
 
 void Box3DPhysicsServer3D::_cone_twist_joint_set_param(const RID& p_joint, PhysicsServer3D::ConeTwistJointParam p_param, double p_value) {
+	auto* joint = dynamic_cast<Box3DConeTwistJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	joint->set_param(p_param, p_value);
 }
 
 double Box3DPhysicsServer3D::_cone_twist_joint_get_param(const RID& p_joint, PhysicsServer3D::ConeTwistJointParam p_param) const {
-	return 0.0;
+	auto* joint = dynamic_cast<Box3DConeTwistJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_param(p_param);
 }
 
 void Box3DPhysicsServer3D::_joint_make_generic_6dof(const RID& p_joint, const RID& p_body_a, const Transform3D& p_local_ref_a, const RID& p_body_b, const Transform3D& p_local_ref_b) {
-	ERR_FAIL_MSG("Box3D: Generic6DOFJoint3D is not supported in this version of the Box3D extension.");
+	_joint_clear(p_joint);
+
+	Box3DBodyImpl3D* body_a = body_owner.get_or_null(p_body_a);
+	Box3DBodyImpl3D* body_b = body_owner.get_or_null(p_body_b);
+	ERR_FAIL_NULL(body_a);
+	ERR_FAIL_NULL(body_b);
+
+	auto* joint = memnew(Box3DGeneric6DOFJointImpl3D(body_a, body_b, p_local_ref_a, p_local_ref_b));
+	joint->set_rid(p_joint);
+	joint_owner.replace(p_joint, joint);
+	joint->rebuild();
 }
 
 void Box3DPhysicsServer3D::_generic_6dof_joint_set_param(const RID& p_joint, Vector3::Axis p_axis, PhysicsServer3D::G6DOFJointAxisParam p_param, double p_value) {
+	auto* joint = dynamic_cast<Box3DGeneric6DOFJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	joint->set_param(p_axis, p_param, p_value);
 }
 
 double Box3DPhysicsServer3D::_generic_6dof_joint_get_param(const RID& p_joint, Vector3::Axis p_axis, PhysicsServer3D::G6DOFJointAxisParam p_param) const {
-	return 0.0;
+	auto* joint = dynamic_cast<Box3DGeneric6DOFJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, 0.0);
+	return joint->get_param(p_axis, p_param);
 }
 
 void Box3DPhysicsServer3D::_generic_6dof_joint_set_flag(const RID& p_joint, Vector3::Axis p_axis, PhysicsServer3D::G6DOFJointAxisFlag p_flag, bool p_enable) {
+	auto* joint = dynamic_cast<Box3DGeneric6DOFJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	joint->set_flag(p_axis, p_flag, p_enable);
 }
 
 bool Box3DPhysicsServer3D::_generic_6dof_joint_get_flag(const RID& p_joint, Vector3::Axis p_axis, PhysicsServer3D::G6DOFJointAxisFlag p_flag) const {
-	return false;
+	auto* joint = dynamic_cast<Box3DGeneric6DOFJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, false);
+	return joint->get_flag(p_axis, p_flag);
 }
 
 PhysicsServer3D::JointType Box3DPhysicsServer3D::_joint_get_type(const RID& p_joint) const {
