@@ -272,6 +272,10 @@ public:
 	Dictionary solve_mover_planes(const Vector3& p_target_delta, const Array& p_planes) const;
 	Vector3 clip_mover_velocity(const Vector3& p_velocity, const Array& p_planes) const;
 
+	// --- Box3D-specific: radial explosion impulse (b3World_Explode). Impulse is per
+	// unit of shape area facing the blast; negative implodes. Spheres/capsules/hulls only.
+	void space_explode(const RID& p_space, const Vector3& p_position, double p_radius, double p_falloff, double p_impulse_per_area, uint32_t p_collision_mask);
+
 	// --- Box3D-specific: deterministic recording (b3World_StartRecording) + replay
 	// validation. stop returns the raw recording bytes for storage/transmission.
 	void space_start_recording(const RID& p_space);

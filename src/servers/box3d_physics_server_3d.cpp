@@ -1337,6 +1337,19 @@ Vector3 Box3DPhysicsServer3D::clip_mover_velocity(const Vector3& p_velocity, con
 	return b3_to_godot(b3ClipVector(godot_to_b3(p_velocity), planes.ptr(), planes.size()));
 }
 
+void Box3DPhysicsServer3D::space_explode(const RID& p_space, const Vector3& p_position, double p_radius, double p_falloff, double p_impulse_per_area, uint32_t p_collision_mask) {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL(space);
+
+	b3ExplosionDef def = b3DefaultExplosionDef();
+	def.maskBits = (uint64_t)p_collision_mask;
+	def.position = godot_to_b3(p_position);
+	def.radius = (float)p_radius;
+	def.falloff = (float)p_falloff;
+	def.impulsePerArea = (float)p_impulse_per_area;
+	b3World_Explode(space->get_world_id(), &def);
+}
+
 void Box3DPhysicsServer3D::space_start_recording(const RID& p_space) {
 	Box3DSpace3D* space = space_owner.get_or_null(p_space);
 	ERR_FAIL_NULL(space);
@@ -1417,6 +1430,7 @@ void Box3DPhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("space_cast_mover", "space", "capsule_start", "capsule_end", "radius", "translation", "collision_mask"), &Box3DPhysicsServer3D::space_cast_mover);
 	ClassDB::bind_method(D_METHOD("solve_mover_planes", "target_delta", "planes"), &Box3DPhysicsServer3D::solve_mover_planes);
 	ClassDB::bind_method(D_METHOD("clip_mover_velocity", "velocity", "planes"), &Box3DPhysicsServer3D::clip_mover_velocity);
+	ClassDB::bind_method(D_METHOD("space_explode", "space", "position", "radius", "falloff", "impulse_per_area", "collision_mask"), &Box3DPhysicsServer3D::space_explode);
 	ClassDB::bind_method(D_METHOD("space_start_recording", "space"), &Box3DPhysicsServer3D::space_start_recording);
 	ClassDB::bind_method(D_METHOD("space_stop_recording", "space"), &Box3DPhysicsServer3D::space_stop_recording);
 	ClassDB::bind_method(D_METHOD("space_is_recording", "space"), &Box3DPhysicsServer3D::space_is_recording);
