@@ -22,6 +22,16 @@ const WHEEL_RADIUS := 0.35
 const BOUNCE_SPEED := 40.0
 
 var demo_root: Node3D
+
+
+func _notification(what: int) -> void:
+	# Free the active demo's bodies/joints before quitting so the physics server
+	# tears down with no live RIDs (silences the ~RID_PtrOwner leak warning).
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if demo_root:
+			demo_root.free()
+			demo_root = null
+		get_tree().quit()
 var camera: Camera3D
 var label: Label
 var server: Object = PhysicsServer3D
