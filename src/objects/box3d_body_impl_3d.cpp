@@ -139,6 +139,7 @@ void Box3DBodyImpl3D::_apply_custom_mass_data() {
 	b3Body_ApplyMassFromShapes(body_id);
 	b3MassData mass_data = b3Body_GetMassData(body_id);
 	const float auto_mass = mass_data.mass;
+	const b3Vec3 auto_center = mass_data.center;
 
 	if (use_custom_mass) {
 		if (!use_custom_inertia && auto_mass > 0.0f) {
@@ -165,7 +166,29 @@ void Box3DBodyImpl3D::_apply_custom_mass_data() {
 		mass_data.inertia.cz.z = (float)inertia.z;
 	}
 	if (use_custom_center_of_mass) {
-		mass_data.center = godot_to_b3(center_of_mass_custom);
+		const b3Vec3 custom_center = godot_to_b3(center_of_mass_custom);
+		if (!use_custom_inertia) {
+			// The (scaled) automatic tensor is measured about the shape-derived center;
+			// box3d interprets mass_data.inertia as being about mass_data.center, so
+			// translate it via the parallel-axis theorem: I += m (d^2 I3 - d d^T).
+			// Without this a lowered center of mass UNDERSTATES roll/pitch inertia and
+			// vehicles tip over far too easily.
+			const float dx = custom_center.x - auto_center.x;
+			const float dy = custom_center.y - auto_center.y;
+			const float dz = custom_center.z - auto_center.z;
+			const float m = mass_data.mass;
+			const float d2 = dx * dx + dy * dy + dz * dz;
+			mass_data.inertia.cx.x += m * (d2 - dx * dx);
+			mass_data.inertia.cx.y += m * (-dx * dy);
+			mass_data.inertia.cx.z += m * (-dx * dz);
+			mass_data.inertia.cy.x += m * (-dy * dx);
+			mass_data.inertia.cy.y += m * (d2 - dy * dy);
+			mass_data.inertia.cy.z += m * (-dy * dz);
+			mass_data.inertia.cz.x += m * (-dz * dx);
+			mass_data.inertia.cz.y += m * (-dz * dy);
+			mass_data.inertia.cz.z += m * (d2 - dz * dz);
+		}
+		mass_data.center = custom_center;
 	}
 	b3Body_SetMassData(body_id, mass_data);
 }
