@@ -260,6 +260,18 @@ public:
 	Array space_get_contact_hit_events(const RID& p_space) const;
 	Array space_get_joint_force_events(const RID& p_space) const;
 
+	// --- Box3D-specific: kinematic character mover (b3World_CollideMover /
+	// b3SolvePlanes / b3ClipVector / b3World_CastMover). Pipeline per physics tick:
+	//   planes = space_collide_mover(space, c1, c2, radius, mask)
+	//   result = solve_mover_planes(desired_delta, planes)   # {delta, iterations, planes}
+	//   velocity = clip_mover_velocity(velocity, result.planes)
+	// Plane dictionaries are mover-relative; feed them back unmodified (optionally
+	// tweaking push_limit / clip_velocity for soft planes).
+	Array space_collide_mover(const RID& p_space, const Vector3& p_c1, const Vector3& p_c2, double p_radius, uint32_t p_collision_mask) const;
+	double space_cast_mover(const RID& p_space, const Vector3& p_c1, const Vector3& p_c2, double p_radius, const Vector3& p_translation, uint32_t p_collision_mask) const;
+	Dictionary solve_mover_planes(const Vector3& p_target_delta, const Array& p_planes) const;
+	Vector3 clip_mover_velocity(const Vector3& p_velocity, const Array& p_planes) const;
+
 	// --- Box3D-specific: deterministic recording (b3World_StartRecording) + replay
 	// validation. stop returns the raw recording bytes for storage/transmission.
 	void space_start_recording(const RID& p_space);

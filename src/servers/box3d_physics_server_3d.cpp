@@ -25,6 +25,9 @@
 #include "../spaces/box3d_space_3d.hpp"
 
 #include <box3d/box3d.h>
+#include <box3d/collision.h>
+
+#include <godot_cpp/templates/local_vector.hpp>
 
 Box3DPhysicsServer3D* Box3DPhysicsServer3D::singleton = nullptr;
 
@@ -1234,6 +1237,106 @@ Array Box3DPhysicsServer3D::space_get_joint_force_events(const RID& p_space) con
 	return space->get_joint_force_events();
 }
 
+namespace {
+
+struct MoverPlaneCollector {
+	Vector3 origin;
+	Array planes;
+};
+
+bool _mover_plane_result(b3ShapeId p_shape, const b3PlaneResult* p_results, int p_count, void* p_context) {
+	auto* collector = static_cast<MoverPlaneCollector*>(p_context);
+	for (int i = 0; i < p_count; i++) {
+		Dictionary plane;
+		plane["normal"] = b3_to_godot(p_results[i].plane.normal);
+		plane["offset"] = p_results[i].plane.offset;
+		plane["point"] = b3_to_godot(p_results[i].point) + collector->origin;
+		plane["push_limit"] = FLT_MAX;
+		plane["clip_velocity"] = true;
+		plane["push"] = 0.0;
+		collector->planes.push_back(plane);
+	}
+	return true;
+}
+
+// Rebuilds the box3d plane array from the script-facing dictionaries.
+LocalVector<b3CollisionPlane> _planes_from_array(const Array& p_planes) {
+	LocalVector<b3CollisionPlane> planes;
+	planes.reserve(p_planes.size());
+	for (int i = 0; i < p_planes.size(); i++) {
+		const Dictionary plane_dict = p_planes[i];
+		b3CollisionPlane plane;
+		plane.plane.normal = godot_to_b3((Vector3)plane_dict.get("normal", Vector3()));
+		plane.plane.offset = (float)(double)plane_dict.get("offset", 0.0);
+		plane.pushLimit = (float)(double)plane_dict.get("push_limit", (double)FLT_MAX);
+		plane.push = (float)(double)plane_dict.get("push", 0.0);
+		plane.clipVelocity = (bool)plane_dict.get("clip_velocity", true);
+		planes.push_back(plane);
+	}
+	return planes;
+}
+
+} // namespace
+
+Array Box3DPhysicsServer3D::space_collide_mover(const RID& p_space, const Vector3& p_c1, const Vector3& p_c2, double p_radius, uint32_t p_collision_mask) const {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, Array());
+
+	const Vector3 origin = (p_c1 + p_c2) * 0.5;
+	b3Capsule mover;
+	mover.center1 = godot_to_b3(p_c1 - origin);
+	mover.center2 = godot_to_b3(p_c2 - origin);
+	mover.radius = (float)p_radius;
+
+	b3QueryFilter filter = b3DefaultQueryFilter();
+	filter.maskBits = (uint64_t)p_collision_mask;
+
+	MoverPlaneCollector collector;
+	collector.origin = origin;
+	b3World_CollideMover(space->get_world_id(), godot_to_b3(origin), &mover, filter, _mover_plane_result, &collector);
+	return collector.planes;
+}
+
+double Box3DPhysicsServer3D::space_cast_mover(const RID& p_space, const Vector3& p_c1, const Vector3& p_c2, double p_radius, const Vector3& p_translation, uint32_t p_collision_mask) const {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, 1.0);
+
+	const Vector3 origin = (p_c1 + p_c2) * 0.5;
+	b3Capsule mover;
+	mover.center1 = godot_to_b3(p_c1 - origin);
+	mover.center2 = godot_to_b3(p_c2 - origin);
+	mover.radius = (float)p_radius;
+
+	b3QueryFilter filter = b3DefaultQueryFilter();
+	filter.maskBits = (uint64_t)p_collision_mask;
+
+	return b3World_CastMover(space->get_world_id(), godot_to_b3(origin), &mover, godot_to_b3(p_translation), filter, nullptr, nullptr);
+}
+
+Dictionary Box3DPhysicsServer3D::solve_mover_planes(const Vector3& p_target_delta, const Array& p_planes) const {
+	LocalVector<b3CollisionPlane> planes = _planes_from_array(p_planes);
+	const b3PlaneSolverResult result = b3SolvePlanes(godot_to_b3(p_target_delta), planes.ptr(), planes.size());
+
+	// b3SolvePlanes writes each plane's computed push; hand the updated planes back so
+	// clip_mover_velocity can skip zero-push planes like the box3d samples do.
+	Array updated = p_planes.duplicate(true);
+	for (int i = 0; i < updated.size(); i++) {
+		Dictionary plane_dict = updated[i];
+		plane_dict["push"] = planes[i].push;
+	}
+
+	Dictionary solved;
+	solved["delta"] = b3_to_godot(result.delta);
+	solved["iterations"] = result.iterationCount;
+	solved["planes"] = updated;
+	return solved;
+}
+
+Vector3 Box3DPhysicsServer3D::clip_mover_velocity(const Vector3& p_velocity, const Array& p_planes) const {
+	LocalVector<b3CollisionPlane> planes = _planes_from_array(p_planes);
+	return b3_to_godot(b3ClipVector(godot_to_b3(p_velocity), planes.ptr(), planes.size()));
+}
+
 void Box3DPhysicsServer3D::space_start_recording(const RID& p_space) {
 	Box3DSpace3D* space = space_owner.get_or_null(p_space);
 	ERR_FAIL_NULL(space);
@@ -1310,6 +1413,10 @@ void Box3DPhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("joint_get_torque_threshold", "joint"), &Box3DPhysicsServer3D::joint_get_torque_threshold);
 	ClassDB::bind_method(D_METHOD("space_get_contact_hit_events", "space"), &Box3DPhysicsServer3D::space_get_contact_hit_events);
 	ClassDB::bind_method(D_METHOD("space_get_joint_force_events", "space"), &Box3DPhysicsServer3D::space_get_joint_force_events);
+	ClassDB::bind_method(D_METHOD("space_collide_mover", "space", "capsule_start", "capsule_end", "radius", "collision_mask"), &Box3DPhysicsServer3D::space_collide_mover);
+	ClassDB::bind_method(D_METHOD("space_cast_mover", "space", "capsule_start", "capsule_end", "radius", "translation", "collision_mask"), &Box3DPhysicsServer3D::space_cast_mover);
+	ClassDB::bind_method(D_METHOD("solve_mover_planes", "target_delta", "planes"), &Box3DPhysicsServer3D::solve_mover_planes);
+	ClassDB::bind_method(D_METHOD("clip_mover_velocity", "velocity", "planes"), &Box3DPhysicsServer3D::clip_mover_velocity);
 	ClassDB::bind_method(D_METHOD("space_start_recording", "space"), &Box3DPhysicsServer3D::space_start_recording);
 	ClassDB::bind_method(D_METHOD("space_stop_recording", "space"), &Box3DPhysicsServer3D::space_stop_recording);
 	ClassDB::bind_method(D_METHOD("space_is_recording", "space"), &Box3DPhysicsServer3D::space_is_recording);
