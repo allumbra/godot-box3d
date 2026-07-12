@@ -95,6 +95,33 @@ void Box3DJointImpl3D::set_torque_threshold(real_t p_threshold) {
 	}
 }
 
+void Box3DJointImpl3D::set_local_frame_a(const Transform3D& p_frame) {
+	local_frame_a = p_frame;
+	if (has_joint_id()) {
+		b3Joint_SetLocalFrameA(joint_id, godot_to_b3_transform(local_frame_a));
+		_wake_bodies();
+	}
+}
+
+void Box3DJointImpl3D::set_local_frame_b(const Transform3D& p_frame) {
+	local_frame_b = p_frame;
+	if (has_joint_id()) {
+		b3Joint_SetLocalFrameB(joint_id, godot_to_b3_transform(local_frame_b));
+		_wake_bodies();
+	}
+}
+
+void Box3DJointImpl3D::_wake_bodies() {
+	// Frame mutation does not wake sleeping bodies inside box3d; without this a moved
+	// anchor has no visible effect until something else wakes the pair.
+	if (body_a != nullptr && body_a->has_body_id()) {
+		b3Body_SetAwake(body_a->get_body_id(), true);
+	}
+	if (body_b != nullptr && body_b->has_body_id()) {
+		b3Body_SetAwake(body_b->get_body_id(), true);
+	}
+}
+
 void Box3DJointImpl3D::_destroy_joint_id() {
 	// b3DestroyBody destroys attached joints inside box3d, so a cached joint_id can be
 	// stale by the time we get here (e.g. a body left its space) — validate first.

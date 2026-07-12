@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/physics_server3d.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/variant/callable.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
 
 using namespace godot;
 
@@ -38,6 +39,13 @@ public:
 	real_t get_rolling_resistance() const { return rolling_resistance; }
 
 	void set_rolling_resistance(real_t p_value);
+
+	// Per-pair collision exceptions, backed by box3d filter joints owned by this body.
+	void add_collision_exception(const RID& p_other_rid, Box3DBodyImpl3D* p_other);
+
+	void remove_collision_exception(const RID& p_other_rid);
+
+	TypedArray<RID> get_collision_exceptions() const;
 
 	BodyMode get_mode() const { return mode; }
 
@@ -214,4 +222,8 @@ private:
 	Box3DPhysicsDirectBodyState3D* direct_state = nullptr;
 
 	HashSet<Box3DJointImpl3D*> joints;
+
+	// Exception filter joints owned by this body, keyed by the excepted body's RID
+	// (RIDs never dangle; a freed excepted body just leaves its joint inert).
+	HashMap<RID, Box3DJointImpl3D*> collision_exceptions;
 };

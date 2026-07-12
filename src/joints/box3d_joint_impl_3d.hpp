@@ -62,12 +62,24 @@ public:
 
 	void set_torque_threshold(real_t p_threshold);
 
+	// Post-creation joint frame mutation (b3Joint_SetLocalFrameA/B) — enables e.g.
+	// changing a pin joint's anchors after creation.
+	Transform3D get_local_frame_a() const { return local_frame_a; }
+
+	void set_local_frame_a(const Transform3D& p_frame);
+
+	Transform3D get_local_frame_b() const { return local_frame_b; }
+
+	void set_local_frame_b(const Transform3D& p_frame);
+
 protected:
 	Box3DJointImpl3D(Box3DBodyImpl3D* p_body_a, Box3DBodyImpl3D* p_body_b, const Transform3D& p_local_frame_a, const Transform3D& p_local_frame_b);
 
 	virtual b3JointId _create_joint_id(b3WorldId p_world_id, b3BodyId p_body_a, b3BodyId p_body_b, b3Transform p_local_frame_a, b3Transform p_local_frame_b) = 0;
 
 	void _destroy_joint_id();
+
+	void _wake_bodies();
 
 	Transform3D local_frame_a;
 	Transform3D local_frame_b;

@@ -766,17 +766,24 @@ bool Box3DPhysicsServer3D::_body_is_axis_locked(const RID& p_body, PhysicsServer
 }
 
 void Box3DPhysicsServer3D::_body_add_collision_exception(const RID& p_body, const RID& p_excepted_body) {
-	// v1: full per-pair collision exception lists are a non-goal. The common single-group
-	// case is handled via b3Filter.groupIndex instead (see the plan's Non-goals section).
-	WARN_PRINT_ONCE("Box3D: per-pair collision exceptions are not implemented in this version; use collision layers/masks instead.");
+	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
+	Box3DBodyImpl3D* excepted = body_owner.get_or_null(p_excepted_body);
+	ERR_FAIL_NULL(body);
+	ERR_FAIL_NULL(excepted);
+	// Backed by a box3d filter joint between the pair (b3CreateFilterJoint).
+	body->add_collision_exception(p_excepted_body, excepted);
 }
 
 void Box3DPhysicsServer3D::_body_remove_collision_exception(const RID& p_body, const RID& p_excepted_body) {
-	// See _body_add_collision_exception.
+	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL(body);
+	body->remove_collision_exception(p_excepted_body);
 }
 
 TypedArray<RID> Box3DPhysicsServer3D::_body_get_collision_exceptions(const RID& p_body) const {
-	return TypedArray<RID>();
+	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
+	ERR_FAIL_NULL_V(body, TypedArray<RID>());
+	return body->get_collision_exceptions();
 }
 
 void Box3DPhysicsServer3D::_body_set_max_contacts_reported(const RID& p_body, int32_t p_amount) {
@@ -895,19 +902,31 @@ double Box3DPhysicsServer3D::_pin_joint_get_param(const RID& p_joint, PhysicsSer
 }
 
 void Box3DPhysicsServer3D::_pin_joint_set_local_a(const RID& p_joint, const Vector3& p_local_a) {
-	WARN_PRINT_ONCE("Box3D: changing a PinJoint3D's local anchor after creation is not supported; recreate the joint instead.");
+	auto* joint = dynamic_cast<Box3DPinJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	Transform3D frame = joint->get_local_frame_a();
+	frame.origin = p_local_a;
+	joint->set_local_frame_a(frame);
 }
 
 Vector3 Box3DPhysicsServer3D::_pin_joint_get_local_a(const RID& p_joint) const {
-	return Vector3();
+	auto* joint = dynamic_cast<Box3DPinJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, Vector3());
+	return joint->get_local_frame_a().origin;
 }
 
 void Box3DPhysicsServer3D::_pin_joint_set_local_b(const RID& p_joint, const Vector3& p_local_b) {
-	WARN_PRINT_ONCE("Box3D: changing a PinJoint3D's local anchor after creation is not supported; recreate the joint instead.");
+	auto* joint = dynamic_cast<Box3DPinJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL(joint);
+	Transform3D frame = joint->get_local_frame_b();
+	frame.origin = p_local_b;
+	joint->set_local_frame_b(frame);
 }
 
 Vector3 Box3DPhysicsServer3D::_pin_joint_get_local_b(const RID& p_joint) const {
-	return Vector3();
+	auto* joint = dynamic_cast<Box3DPinJointImpl3D*>(joint_owner.get_or_null(p_joint));
+	ERR_FAIL_NULL_V(joint, Vector3());
+	return joint->get_local_frame_b().origin;
 }
 
 void Box3DPhysicsServer3D::_joint_make_hinge(const RID& p_joint, const RID& p_body_a, const Transform3D& p_hinge_a, const RID& p_body_b, const Transform3D& p_hinge_b) {
@@ -1202,6 +1221,29 @@ Array Box3DPhysicsServer3D::space_get_joint_force_events(const RID& p_space) con
 	return space->get_joint_force_events();
 }
 
+void Box3DPhysicsServer3D::space_start_recording(const RID& p_space) {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL(space);
+	space->start_recording();
+}
+
+PackedByteArray Box3DPhysicsServer3D::space_stop_recording(const RID& p_space) {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, PackedByteArray());
+	return space->stop_recording();
+}
+
+bool Box3DPhysicsServer3D::space_is_recording(const RID& p_space) const {
+	Box3DSpace3D* space = space_owner.get_or_null(p_space);
+	ERR_FAIL_NULL_V(space, false);
+	return space->is_recording();
+}
+
+bool Box3DPhysicsServer3D::validate_replay(const PackedByteArray& p_data, int p_worker_count) const {
+	ERR_FAIL_COND_V(p_data.is_empty(), false);
+	return b3ValidateReplay(p_data.ptr(), p_data.size(), MAX(1, p_worker_count));
+}
+
 void Box3DPhysicsServer3D::body_set_rolling_resistance(const RID& p_body, double p_value) {
 	Box3DBodyImpl3D* body = body_owner.get_or_null(p_body);
 	ERR_FAIL_NULL(body);
@@ -1255,6 +1297,10 @@ void Box3DPhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("joint_get_torque_threshold", "joint"), &Box3DPhysicsServer3D::joint_get_torque_threshold);
 	ClassDB::bind_method(D_METHOD("space_get_contact_hit_events", "space"), &Box3DPhysicsServer3D::space_get_contact_hit_events);
 	ClassDB::bind_method(D_METHOD("space_get_joint_force_events", "space"), &Box3DPhysicsServer3D::space_get_joint_force_events);
+	ClassDB::bind_method(D_METHOD("space_start_recording", "space"), &Box3DPhysicsServer3D::space_start_recording);
+	ClassDB::bind_method(D_METHOD("space_stop_recording", "space"), &Box3DPhysicsServer3D::space_stop_recording);
+	ClassDB::bind_method(D_METHOD("space_is_recording", "space"), &Box3DPhysicsServer3D::space_is_recording);
+	ClassDB::bind_method(D_METHOD("validate_replay", "data", "worker_count"), &Box3DPhysicsServer3D::validate_replay);
 
 	const StringName cls = get_class_static();
 	ClassDB::bind_integer_constant(cls, "", "WHEEL_JOINT_PARAM_SUSPENSION_HERTZ", Box3DWheelJointImpl3D::PARAM_SUSPENSION_HERTZ);

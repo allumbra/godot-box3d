@@ -1,5 +1,6 @@
 #include "box3d_body_impl_3d.hpp"
 
+#include "../joints/box3d_filter_joint_impl_3d.hpp"
 #include "../joints/box3d_joint_impl_3d.hpp"
 #include "../misc/type_conversions.hpp"
 #include "box3d_physics_direct_body_state_3d.hpp"
@@ -7,6 +8,12 @@
 #include <box3d/box3d.h>
 
 Box3DBodyImpl3D::~Box3DBodyImpl3D() {
+	// Exception filter joints are owned by this body (no RID of their own).
+	for (const KeyValue<RID, Box3DJointImpl3D*>& exception : collision_exceptions) {
+		memdelete(exception.value);
+	}
+	collision_exceptions.clear();
+
 	// Copy: on_body_destroyed() does not unregister, but guard against future mutation.
 	HashSet<Box3DJointImpl3D*> attached = joints;
 	for (Box3DJointImpl3D* joint : attached) {
@@ -35,6 +42,32 @@ void Box3DBodyImpl3D::set_space(Box3DSpace3D* p_space) {
 void Box3DBodyImpl3D::set_rolling_resistance(real_t p_value) {
 	rolling_resistance = p_value;
 	_refresh_shape_materials();
+}
+
+void Box3DBodyImpl3D::add_collision_exception(const RID& p_other_rid, Box3DBodyImpl3D* p_other) {
+	if (collision_exceptions.has(p_other_rid) || p_other == this) {
+		return;
+	}
+	auto* joint = memnew(Box3DFilterJointImpl3D(this, p_other));
+	joint->rebuild();
+	collision_exceptions.insert(p_other_rid, joint);
+}
+
+void Box3DBodyImpl3D::remove_collision_exception(const RID& p_other_rid) {
+	HashMap<RID, Box3DJointImpl3D*>::Iterator entry = collision_exceptions.find(p_other_rid);
+	if (entry == collision_exceptions.end()) {
+		return;
+	}
+	memdelete(entry->value);
+	collision_exceptions.remove(entry);
+}
+
+TypedArray<RID> Box3DBodyImpl3D::get_collision_exceptions() const {
+	TypedArray<RID> result;
+	for (const KeyValue<RID, Box3DJointImpl3D*>& exception : collision_exceptions) {
+		result.push_back(exception.key);
+	}
+	return result;
 }
 
 Box3DPhysicsDirectBodyState3D* Box3DBodyImpl3D::get_direct_state_or_null() {
