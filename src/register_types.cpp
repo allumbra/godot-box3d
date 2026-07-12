@@ -2,7 +2,11 @@
 
 #include "misc/box3d_globals.hpp"
 #include "misc/box3d_replay_player.hpp"
+#include "objects/box3d_distance_joint_node_3d.hpp"
+#include "objects/box3d_joint_node_3d.hpp"
+#include "objects/box3d_motor_joint_node_3d.hpp"
 #include "objects/box3d_physics_direct_body_state_3d.hpp"
+#include "objects/box3d_weld_joint_node_3d.hpp"
 #include "objects/box3d_wheel_joint_3d.hpp"
 #include "servers/box3d_physics_server_3d.hpp"
 #include "spaces/box3d_physics_direct_space_state_3d.hpp"
@@ -40,6 +44,10 @@ void initialize_box3d_module(ModuleInitializationLevel p_level) {
 		// SCENE level so they appear in the editor's node dialog.
 		GDREGISTER_CLASS(Box3DWheelJoint3D);
 		GDREGISTER_CLASS(Box3DReplayPlayer);
+		GDREGISTER_ABSTRACT_CLASS(Box3DJointNode3D);
+		GDREGISTER_CLASS(Box3DWeldJoint3D);
+		GDREGISTER_CLASS(Box3DDistanceJoint3D);
+		GDREGISTER_CLASS(Box3DMotorJoint3D);
 	}
 }
 

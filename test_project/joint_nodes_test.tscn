@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://jointnodes001"]
+
+[ext_resource type="Script" path="res://joint_nodes_test.gd" id="1_jnt"]
+
+[node name="JointNodesTest" type="Node3D"]
+script = ExtResource("1_jnt")
