@@ -260,6 +260,13 @@ public:
 	Array space_get_contact_hit_events(const RID& p_space) const;
 	Array space_get_joint_force_events(const RID& p_space) const;
 
+	// --- Box3D-specific: deterministic recording (b3World_StartRecording) + replay
+	// validation. stop returns the raw recording bytes for storage/transmission.
+	void space_start_recording(const RID& p_space);
+	PackedByteArray space_stop_recording(const RID& p_space);
+	bool space_is_recording(const RID& p_space) const;
+	bool validate_replay(const PackedByteArray& p_data, int p_worker_count) const;
+
 	// --- Soft bodies (non-goal: return invalid RID / no-op) ---
 	RID _soft_body_create() override;
 	void _soft_body_update_rendering_server(const RID& p_body, PhysicsServer3DRenderingServerHandler* p_rendering_server_handler) override;

@@ -71,6 +71,14 @@ public:
 	// (see Box3DJointImpl3D::set_force_threshold): Array of joint RIDs.
 	Array get_joint_force_events() const { return joint_force_events; }
 
+	// Recording (b3World_StartRecording): captures world mutations for deterministic
+	// replay. stop_recording returns the raw recording bytes (empty if not recording).
+	void start_recording();
+
+	PackedByteArray stop_recording();
+
+	bool is_recording() const { return recording_active; }
+
 	// Drains the pending queues, invoking every queued callable directly (this call *is*
 	// the deferred point, so callables run synchronously here rather than via
 	// call_deferred).
@@ -92,6 +100,9 @@ private:
 
 	Array contact_hit_events;
 	Array joint_force_events;
+
+	struct b3Recording* recording = nullptr;
+	bool recording_active = false;
 
 	void _pull_body_events();
 

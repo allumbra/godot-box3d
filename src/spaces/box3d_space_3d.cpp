@@ -28,10 +28,45 @@ Box3DSpace3D::~Box3DSpace3D() {
 		memdelete(direct_state);
 		direct_state = nullptr;
 	}
+	if (recording != nullptr) {
+		if (recording_active && B3_IS_NON_NULL(world_id)) {
+			b3World_StopRecording(world_id);
+		}
+		b3DestroyRecording(recording);
+		recording = nullptr;
+	}
 	if (B3_IS_NON_NULL(world_id)) {
 		b3DestroyWorld(world_id);
 		world_id = b3_nullWorldId;
 	}
+}
+
+void Box3DSpace3D::start_recording() {
+	if (recording_active) {
+		return;
+	}
+	if (recording == nullptr) {
+		recording = b3CreateRecording(0);
+	}
+	// b3World_StartRecording resets the buffer, so one handle serves many sessions.
+	b3World_StartRecording(world_id, recording);
+	recording_active = true;
+}
+
+PackedByteArray Box3DSpace3D::stop_recording() {
+	PackedByteArray bytes;
+	if (!recording_active) {
+		return bytes;
+	}
+	b3World_StopRecording(world_id);
+	recording_active = false;
+	const uint8_t* data = b3Recording_GetData(recording);
+	const int size = b3Recording_GetSize(recording);
+	if (data != nullptr && size > 0) {
+		bytes.resize(size);
+		memcpy(bytes.ptrw(), data, size);
+	}
+	return bytes;
 }
 
 double Box3DSpace3D::get_param(PhysicsServer3D::SpaceParameter p_param) const {
