@@ -405,9 +405,13 @@ void Box3DBodyImpl3D::apply_central_impulse(const Vector3& p_impulse) {
 	}
 }
 
+// NOTE: Godot's apply_force/apply_impulse `position` is an offset from the body origin
+// in GLOBAL coordinates — it must NOT be rotated by the body basis. Rotating it made
+// force application points swing away from their true location as soon as a body yawed
+// or pitched (vehicles applying wheel forces rolled over in turns).
 void Box3DBodyImpl3D::apply_impulse(const Vector3& p_impulse, const Vector3& p_position) {
 	if (has_body_id()) {
-		const Vector3 world_point = get_transform().xform(p_position);
+		const Vector3 world_point = get_transform().origin + p_position;
 		b3Body_ApplyLinearImpulse(body_id, godot_to_b3(p_impulse), godot_to_b3(world_point), true);
 	}
 }
@@ -426,7 +430,7 @@ void Box3DBodyImpl3D::apply_central_force(const Vector3& p_force) {
 
 void Box3DBodyImpl3D::apply_force(const Vector3& p_force, const Vector3& p_position) {
 	if (has_body_id()) {
-		const Vector3 world_point = get_transform().xform(p_position);
+		const Vector3 world_point = get_transform().origin + p_position;
 		b3Body_ApplyForce(body_id, godot_to_b3(p_force), godot_to_b3(world_point), true);
 	}
 }
