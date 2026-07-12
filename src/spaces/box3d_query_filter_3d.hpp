@@ -1,5 +1,6 @@
 #pragma once
 
+#include <godot_cpp/classes/physics_direct_space_state3d_extension.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/variant/rid.hpp>
 
@@ -16,6 +17,10 @@ struct Box3DQueryFilter3D {
 	HashSet<RID> exclude;
 	bool collide_with_bodies = true;
 	bool collide_with_areas = false;
+	// When set, per-query engine-side exclusions (PhysicsRayQueryParameters3D.exclude
+	// et al.) are honored: Godot never passes the exclude array into the extension
+	// query virtuals — it holds the list and the extension must ask back per candidate.
+	PhysicsDirectSpaceState3DExtension* state = nullptr;
 
 	Box3DQueryFilter3D() = default;
 
@@ -25,5 +30,10 @@ struct Box3DQueryFilter3D {
 		filter.maskBits = (uint64_t)p_collision_mask;
 	}
 
-	bool should_exclude(const RID& p_rid) const { return exclude.has(p_rid); }
+	bool should_exclude(const RID& p_rid) const {
+		if (exclude.has(p_rid)) {
+			return true;
+		}
+		return state != nullptr && state->is_body_excluded_from_query(p_rid);
+	}
 };
