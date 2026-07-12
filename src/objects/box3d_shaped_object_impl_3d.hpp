@@ -77,6 +77,11 @@ protected:
 	// from the _get_shape_* virtuals) to every live shape id.
 	void _refresh_shape_materials();
 
+	// Called after any shape mutation (add/remove/replace/transform/disable/rebuild).
+	// Box3d recomputes body mass data from shape densities on these, so subclasses with
+	// explicit mass/inertia/center overrides re-apply them here.
+	virtual void _shapes_changed() {}
+
 	void _destroy_body_id();
 
 	b3BodyId body_id = b3_nullBodyId;

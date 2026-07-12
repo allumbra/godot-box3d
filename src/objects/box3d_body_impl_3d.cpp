@@ -32,6 +32,8 @@ void Box3DBodyImpl3D::set_space(Box3DSpace3D* p_space) {
 		return;
 	}
 	Box3DShapedObjectImpl3D::set_space(p_space);
+	// Shapes are attached now (rebuild_shapes in the parent), so mass overrides stick.
+	_apply_custom_mass_data();
 	// The b3BodyId was just destroyed and/or recreated; any joint built against the old
 	// id is implicitly gone inside box3d and must be rebuilt against the new one.
 	for (Box3DJointImpl3D* joint : joints) {
@@ -119,24 +121,53 @@ b3BodyId Box3DBodyImpl3D::_create_body_id(b3WorldId p_world_id) {
 
 	const b3BodyId new_body_id = b3CreateBody(p_world_id, &def);
 
-	if (use_custom_mass || use_custom_inertia) {
-		b3MassData mass_data = b3Body_GetMassData(new_body_id);
-		if (use_custom_mass) {
-			mass_data.mass = (float)mass;
-		}
-		if (use_custom_inertia) {
-			mass_data.inertia = b3Mat3_zero;
-			mass_data.inertia.cx.x = (float)inertia.x;
-			mass_data.inertia.cy.y = (float)inertia.y;
-			mass_data.inertia.cz.z = (float)inertia.z;
-		}
-		if (use_custom_center_of_mass) {
-			mass_data.center = godot_to_b3(center_of_mass_custom);
-		}
-		b3Body_SetMassData(new_body_id, mass_data);
+	// Custom mass data is NOT applied here: the body has no shapes yet, and attaching
+	// shapes makes box3d recompute mass data (clobbering any override). set_space()
+	// applies it via _apply_custom_mass_data() after rebuild_shapes().
+	return new_body_id;
+}
+
+void Box3DBodyImpl3D::_apply_custom_mass_data() {
+	if (!has_body_id()) {
+		return;
+	}
+	if (!use_custom_mass && !use_custom_inertia && !use_custom_center_of_mass) {
+		return;
 	}
 
-	return new_body_id;
+	// Reset to pristine shape-derived data first so repeated overrides never compound.
+	b3Body_ApplyMassFromShapes(body_id);
+	b3MassData mass_data = b3Body_GetMassData(body_id);
+	const float auto_mass = mass_data.mass;
+
+	if (use_custom_mass) {
+		if (!use_custom_inertia && auto_mass > 0.0f) {
+			// Godot semantics: automatic inertia scales with the explicit mass. Shapes
+			// carry density 1.0, so without this a car-sized hull given a 1000+ kg mass
+			// keeps a ~few-kg inertia tensor and any off-center force flips/shakes it.
+			const float scale = (float)mass / auto_mass;
+			mass_data.inertia.cx.x *= scale;
+			mass_data.inertia.cx.y *= scale;
+			mass_data.inertia.cx.z *= scale;
+			mass_data.inertia.cy.x *= scale;
+			mass_data.inertia.cy.y *= scale;
+			mass_data.inertia.cy.z *= scale;
+			mass_data.inertia.cz.x *= scale;
+			mass_data.inertia.cz.y *= scale;
+			mass_data.inertia.cz.z *= scale;
+		}
+		mass_data.mass = (float)mass;
+	}
+	if (use_custom_inertia) {
+		mass_data.inertia = b3Mat3_zero;
+		mass_data.inertia.cx.x = (float)inertia.x;
+		mass_data.inertia.cy.y = (float)inertia.y;
+		mass_data.inertia.cz.z = (float)inertia.z;
+	}
+	if (use_custom_center_of_mass) {
+		mass_data.center = godot_to_b3(center_of_mass_custom);
+	}
+	b3Body_SetMassData(body_id, mass_data);
 }
 
 void Box3DBodyImpl3D::set_mode(BodyMode p_mode) {
@@ -160,11 +191,7 @@ real_t Box3DBodyImpl3D::get_mass() const {
 void Box3DBodyImpl3D::set_mass(real_t p_mass) {
 	mass = p_mass;
 	use_custom_mass = true;
-	if (has_body_id()) {
-		b3MassData mass_data = b3Body_GetMassData(body_id);
-		mass_data.mass = (float)p_mass;
-		b3Body_SetMassData(body_id, mass_data);
-	}
+	_apply_custom_mass_data();
 }
 
 Vector3 Box3DBodyImpl3D::get_inertia() const {
@@ -178,16 +205,7 @@ Vector3 Box3DBodyImpl3D::get_inertia() const {
 void Box3DBodyImpl3D::set_inertia(const Vector3& p_inertia) {
 	inertia = p_inertia;
 	use_custom_inertia = p_inertia != Vector3();
-	if (has_body_id()) {
-		b3MassData mass_data = b3Body_GetMassData(body_id);
-		if (use_custom_inertia) {
-			mass_data.inertia = b3Mat3_zero;
-			mass_data.inertia.cx.x = (float)p_inertia.x;
-			mass_data.inertia.cy.y = (float)p_inertia.y;
-			mass_data.inertia.cz.z = (float)p_inertia.z;
-		}
-		b3Body_SetMassData(body_id, mass_data);
-	}
+	_apply_custom_mass_data();
 }
 
 Vector3 Box3DBodyImpl3D::get_center_of_mass() const {
@@ -200,11 +218,7 @@ Vector3 Box3DBodyImpl3D::get_center_of_mass() const {
 void Box3DBodyImpl3D::set_center_of_mass(const Vector3& p_center) {
 	center_of_mass_custom = p_center;
 	use_custom_center_of_mass = true;
-	if (has_body_id()) {
-		b3MassData mass_data = b3Body_GetMassData(body_id);
-		mass_data.center = godot_to_b3(p_center);
-		b3Body_SetMassData(body_id, mass_data);
-	}
+	_apply_custom_mass_data();
 }
 
 void Box3DBodyImpl3D::apply_mass_from_shapes() {

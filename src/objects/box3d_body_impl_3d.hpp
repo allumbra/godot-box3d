@@ -177,6 +177,13 @@ protected:
 
 	float _get_shape_rolling_resistance() const override { return (float)rolling_resistance; }
 
+	// Re-applies mass/inertia/center-of-mass overrides on top of pristine shape-derived
+	// mass data (auto inertia is scaled to an explicit mass, matching Godot semantics).
+	void _apply_custom_mass_data();
+
+	// Shape mutations make box3d recompute mass data from densities — re-stick overrides.
+	void _shapes_changed() override { _apply_custom_mass_data(); }
+
 private:
 	void _update_motion_locks();
 

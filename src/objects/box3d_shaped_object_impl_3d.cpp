@@ -186,6 +186,7 @@ void Box3DShapedObjectImpl3D::add_shape(Box3DShapeImpl3D* p_shape, const Transfo
 	if (has_body_id()) {
 		_create_shape_instance(shapes[shapes.size() - 1]);
 	}
+	_shapes_changed();
 }
 
 void Box3DShapedObjectImpl3D::remove_shape(const Box3DShapeImpl3D* p_shape) {
@@ -203,6 +204,7 @@ void Box3DShapedObjectImpl3D::remove_shape(int32_t p_index) {
 	for (uint32_t i = p_index; i < shapes.size(); i++) {
 		shapes[i].set_index(i);
 	}
+	_shapes_changed();
 }
 
 void Box3DShapedObjectImpl3D::set_shape(int32_t p_index, Box3DShapeImpl3D* p_shape) {
@@ -212,6 +214,7 @@ void Box3DShapedObjectImpl3D::set_shape(int32_t p_index, Box3DShapeImpl3D* p_sha
 	if (has_body_id()) {
 		_create_shape_instance(shapes[p_index]);
 	}
+	_shapes_changed();
 }
 
 void Box3DShapedObjectImpl3D::clear_shapes() {
@@ -219,6 +222,7 @@ void Box3DShapedObjectImpl3D::clear_shapes() {
 		_destroy_shape_instance(shapes[i]);
 	}
 	shapes.clear();
+	_shapes_changed();
 }
 
 Box3DShapeImpl3D* Box3DShapedObjectImpl3D::get_shape(int32_t p_index) const {
@@ -239,6 +243,7 @@ void Box3DShapedObjectImpl3D::set_shape_transform(int32_t p_index, const Transfo
 		_destroy_shape_instance(instance);
 		_create_shape_instance(instance);
 	}
+	_shapes_changed();
 }
 
 bool Box3DShapedObjectImpl3D::is_shape_disabled(int32_t p_index) const {
@@ -258,6 +263,7 @@ void Box3DShapedObjectImpl3D::set_shape_disabled(int32_t p_index, bool p_disable
 	} else if (has_body_id()) {
 		_create_shape_instance(instance);
 	}
+	_shapes_changed();
 }
 
 void Box3DShapedObjectImpl3D::set_space(Box3DSpace3D* p_space) {
@@ -290,6 +296,7 @@ void Box3DShapedObjectImpl3D::rebuild_shapes() {
 			_create_shape_instance(instance);
 		}
 	}
+	_shapes_changed();
 }
 
 void Box3DShapedObjectImpl3D::_refresh_shape_materials() {
