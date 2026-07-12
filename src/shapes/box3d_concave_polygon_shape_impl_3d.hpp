@@ -27,10 +27,18 @@ public:
 	// b3ShapeId built from it exists.
 	const b3MeshData* get_mesh() const { return mesh; }
 
+	// Mesh with the given shape-instance local transform baked into its vertices
+	// (box3d has no per-shape transform for meshes). Identity returns the shared mesh;
+	// other transforms cook a copy owned by this shape (freed on rebuild/destruction).
+	const b3MeshData* get_mesh_transformed(const Transform3D& p_local);
+
 private:
 	void _rebuild_mesh();
 
+	b3MeshData* _cook_mesh(const Transform3D& p_transform) const;
+
 	PackedVector3Array faces;
 	b3MeshData* mesh = nullptr;
+	LocalVector<b3MeshData*> transformed_meshes;
 	AABB aabb;
 };

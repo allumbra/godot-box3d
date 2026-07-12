@@ -105,7 +105,10 @@ b3ShapeId create_box3d_shape(
 
 		case PhysicsServer3D::SHAPE_CONCAVE_POLYGON: {
 			auto* mesh_shape = static_cast<Box3DConcavePolygonShapeImpl3D*>(shape);
-			const b3MeshData* mesh = mesh_shape->get_mesh();
+			// Box3d meshes carry no per-shape transform, so a non-identity shape-instance
+			// transform is baked into a cooked copy (previously it was silently dropped —
+			// offset/rotated trimesh colliders sat at the body origin).
+			const b3MeshData* mesh = mesh_shape->get_mesh_transformed(local);
 			if (mesh == nullptr) {
 				return b3_nullShapeId;
 			}
@@ -118,6 +121,9 @@ b3ShapeId create_box3d_shape(
 			const b3HeightFieldData* height_field = height_shape->get_height_field();
 			if (height_field == nullptr) {
 				return b3_nullShapeId;
+			}
+			if (local.origin != Vector3() || !local.basis.is_equal_approx(Basis())) {
+				WARN_PRINT_ONCE("Box3D: HeightMapShape3D ignores a non-identity CollisionShape3D transform (box3d heightfields carry no per-shape transform).");
 			}
 			def.invokeContactCreation = true;
 			return b3CreateHeightFieldShape(p_body_id, &def, height_field);
