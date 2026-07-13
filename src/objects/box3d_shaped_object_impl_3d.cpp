@@ -58,19 +58,23 @@ b3ShapeId create_box3d_shape(
 
 	const Transform3D& local = p_instance.get_transform();
 	const PhysicsServer3D::ShapeType type = shape->get_type();
+	// godot_to_b3_transform keeps rotation+translation only, so basis scale must be
+	// baked into the geometry itself (a scaled CollisionShape3D otherwise collides at
+	// its unscaled size — e.g. walls stopping vehicles well before their visual face).
+	const Vector3 shape_scale = local.basis.get_scale();
 
 	switch (type) {
 		case PhysicsServer3D::SHAPE_SPHERE: {
 			auto* sphere_shape = static_cast<Box3DSphereShapeImpl3D*>(shape);
 			b3Sphere sphere;
 			sphere.center = godot_to_b3(local.origin);
-			sphere.radius = (float)sphere_shape->get_radius();
+			sphere.radius = (float)(sphere_shape->get_radius() * shape_scale.x);
 			return b3CreateSphereShape(p_body_id, &def, &sphere);
 		}
 
 		case PhysicsServer3D::SHAPE_CAPSULE: {
 			auto* capsule_shape = static_cast<Box3DCapsuleShapeImpl3D*>(shape);
-			const float radius = (float)capsule_shape->get_radius();
+			const float radius = (float)(capsule_shape->get_radius() * MAX(shape_scale.x, shape_scale.z));
 			const float height = (float)capsule_shape->get_height();
 			const float half_seg = MAX(0.0f, height * 0.5f - radius);
 			const Vector3 local_c1 = local.xform(Vector3(0, half_seg, 0));
@@ -84,7 +88,7 @@ b3ShapeId create_box3d_shape(
 
 		case PhysicsServer3D::SHAPE_BOX: {
 			auto* box_shape = static_cast<Box3DBoxShapeImpl3D*>(shape);
-			const Vector3 half = box_shape->get_half_extents();
+			const Vector3 half = box_shape->get_half_extents() * shape_scale;
 			const b3Transform box_transform = godot_to_b3_transform(local);
 			b3BoxHull box_hull = b3MakeTransformedBoxHull((float)half.x, (float)half.y, (float)half.z, box_transform);
 			return b3CreateHullShape(p_body_id, &def, &box_hull.base);
@@ -100,7 +104,7 @@ b3ShapeId create_box3d_shape(
 				return b3CreateHullShape(p_body_id, &def, hull);
 			}
 			const b3Transform hull_transform = godot_to_b3_transform(local);
-			return b3CreateTransformedHullShape(p_body_id, &def, hull, hull_transform, b3Vec3{1.0f, 1.0f, 1.0f});
+			return b3CreateTransformedHullShape(p_body_id, &def, hull, hull_transform, godot_to_b3(shape_scale));
 		}
 
 		case PhysicsServer3D::SHAPE_CONCAVE_POLYGON: {
