@@ -2,6 +2,7 @@
 
 #include <godot_cpp/classes/physics_direct_body_state3d_extension.hpp>
 #include <godot_cpp/classes/physics_direct_space_state3d.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
 
 using namespace godot;
 
@@ -85,5 +86,25 @@ protected:
 	static void _bind_methods() {}
 
 private:
+	// One flattened manifold point, refreshed from b3Body_GetContactData whenever
+	// Godot asks for the contact count (once per body sync). Feeds RigidBody3D's
+	// contact monitor and script-side impulse reads (e.g. impact damage models).
+	struct CachedContact {
+		Vector3 position;
+		Vector3 normal;
+		Vector3 impulse;
+		Vector3 local_velocity;
+		Vector3 collider_position;
+		Vector3 collider_velocity;
+		RID collider_rid;
+		uint64_t collider_instance_id = 0;
+		int32_t local_shape = 0;
+		int32_t collider_shape = 0;
+	};
+
+	void _refresh_contacts() const;
+
+	mutable LocalVector<CachedContact> contacts;
+
 	Box3DBodyImpl3D* body = nullptr;
 };
